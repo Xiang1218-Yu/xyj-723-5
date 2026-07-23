@@ -1,0 +1,13 @@
+.vscode
+.idea
+node_modules
+dist
+doc
+*.d.ts
+*.js
+*.js.map
+resources/temp
+resources/maki_icons_*
+resources-dev/Fonts/Assets/*
+resources/fonts/
+*.tgz
