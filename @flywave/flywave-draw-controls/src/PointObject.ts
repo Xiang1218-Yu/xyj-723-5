@@ -6,6 +6,8 @@ import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
 import { DrawableObject } from "./DrawableObject";
+import { drawMaterialFactory, type DrawMaterialFactory } from "./DrawMaterials";
+import { type DrawGeoJsonGeometry, isPointGeometry, coordToGeoCoordinates } from "./DrawTypes";
 
 // Texture cache
 const textureCache = new Map<string, THREE.Texture>();
@@ -14,8 +16,10 @@ export class PointObject extends DrawableObject {
     private readonly sprite: THREE.Sprite;
     private spriteMaterial: THREE.SpriteMaterial;
     private readonly ringMesh: THREE.Mesh;
+    private ringMaterial: THREE.MeshBasicMaterial | null = null;
     public isVertex: boolean;
     private readonly baseColor: number;
+    protected materialFactory: DrawMaterialFactory = drawMaterialFactory;
 
     constructor(
         mapView: MapView,
@@ -44,14 +48,8 @@ export class PointObject extends DrawableObject {
         // Create selection ring (only regular points have selection rings)
         if (!isVertex) {
             const ringGeometry = new THREE.RingGeometry(1.5, 1.7, 32);
-            const ringMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffff00,
-                transparent: true,
-                opacity: 0,
-                side: THREE.DoubleSide,
-                depthTest: false
-            });
-            this.ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+            this.ringMaterial = this.materialFactory.createRingMaterial({ color: 0xffff00, opacity: 0 });
+            this.ringMesh = new THREE.Mesh(ringGeometry, this.ringMaterial);
             this.ringMesh.rotation.x = Math.PI / 2;
             this.ringMesh.renderOrder = 99;
             this.add(this.ringMesh);
@@ -69,15 +67,7 @@ export class PointObject extends DrawableObject {
         isEditing: boolean = false
     ): THREE.SpriteMaterial {
         const texture = this.createPointTexture(color, isSelected, isVertex, isEditing);
-        return new THREE.SpriteMaterial({
-            map: texture,
-            color: 0xffffff,
-            transparent: true,
-            opacity: 1.0,
-            sizeAttenuation: false,
-            depthTest: false,
-            depthWrite: false
-        });
+        return this.materialFactory.createSpriteMaterial({ map: texture });
     }
 
     // Change texture creation method to overloadable method
@@ -227,8 +217,8 @@ export class PointObject extends DrawableObject {
         oldMaterial.dispose();
 
         // Update selection ring visibility (only for regular points)
-        if (!this.isVertex && this.ringMesh) {
-            (this.ringMesh.material as THREE.MeshBasicMaterial).opacity = this.isSelected ? 0.8 : 0;
+        if (!this.isVertex && this.ringMesh && this.ringMaterial) {
+            this.ringMaterial.opacity = this.isSelected ? 0.8 : 0;
         }
     }
 
@@ -247,13 +237,13 @@ export class PointObject extends DrawableObject {
     }
 
     // Implement base class abstract method
-    public toGeoJSON(): any {
+    public toGeoJSON(): DrawGeoJsonGeometry {
         return {
             type: "Point",
             coordinates: [
                 this.vertices[0].longitude,
                 this.vertices[0].latitude,
-                this.vertices[0].altitude || 0
+                this.vertices[0].altitude ?? 0
             ]
         };
     }
@@ -297,19 +287,13 @@ export class PointObject extends DrawableObject {
     }
 
     // Static method: Create point object from GeoJSON
-    public static fromGeoJSON(mapView: MapView, geoJson: any, id?: string): PointObject | null {
-        if (!geoJson || geoJson.type !== "Point" || !geoJson.coordinates) {
+    public static fromGeoJSON(mapView: MapView, geoJson: unknown, id?: string): PointObject | null {
+        if (!isPointGeometry(geoJson)) {
             return null;
         }
 
         try {
-            const coordinates = geoJson.coordinates;
-            const position = new GeoCoordinates(
-                coordinates[1],
-                coordinates[0],
-                coordinates[2] || 0
-            );
-
+            const position = coordToGeoCoordinates(geoJson.coordinates);
             return new PointObject(mapView, position, false, id);
         } catch (error) {
             console.error("Error creating PointObject from GeoJSON:", error);
@@ -324,7 +308,7 @@ export class PointObject extends DrawableObject {
         // Clean up selection ring
         if (!this.isVertex && this.ringMesh) {
             this.ringMesh.geometry.dispose();
-            (this.ringMesh.material as THREE.Material).dispose();
+            this.ringMaterial?.dispose();
         }
 
         // Remove from parent object

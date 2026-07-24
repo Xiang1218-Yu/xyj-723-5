@@ -8,6 +8,7 @@ import {
     RawShaderMaterial
 } from "./RawShaderMaterial";
 import AtmosphereShaderChunks from "./ShaderChunks/AtmosphereChunks";
+import { type ShaderDefines } from "./ShaderTypes";
 import { setShaderDefine, setShaderMaterialDefine } from "./Utils";
 
 const EQUATORIAL_RADIUS: number = 6378137.0;
@@ -362,7 +363,7 @@ export class SkyAtmosphereMaterial extends RawShaderMaterial {
 
         if (params) {
             // Import shader chunks
-            const defines: Record<string, any> = {};
+            const defines: ShaderDefines = {};
             defines.CAMERA_IN_SPACE = "";
 
             shaderParams = {
@@ -455,12 +456,12 @@ export class SkyAtmosphereMaterial extends RawShaderMaterial {
 
                 const cameraInSpace = cameraHeight > this.outerRadius;
                 const needsUpdate0 = setShaderDefine(
-                    shaderMaterial.defines,
+                    shaderMaterial.defines as ShaderDefines,
                     "CAMERA_IN_SPACE",
                     cameraInSpace
                 );
                 const needsUpdate1 = setShaderDefine(
-                    shaderMaterial.defines,
+                    shaderMaterial.defines as ShaderDefines,
                     "CAMERA_IN_ATMOSPHERE",
                     !cameraInSpace
                 );

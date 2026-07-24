@@ -44,11 +44,18 @@ export class RawShaderMaterial extends THREE.RawShaderMaterial {
               }
             : undefined;
         // Remove properties that are not in THREE.ShaderMaterialParameters, otherwise THREE.js
-        // will log warnings.
+        // will log warnings. The `rendererCapabilities` field lives on our extended parameter
+        // interface but must not be forwarded to the underlying `RawShaderMaterial`.
+        let superParams: THREE.ShaderMaterialParameters | undefined;
         if (shaderParams) {
-            delete (shaderParams as any).rendererCapabilities;
+            const { rendererCapabilities: _caps, ...rest } =
+                shaderParams as RawShaderMaterialParameters & {
+                    rendererCapabilities?: THREE.WebGLCapabilities;
+                };
+            superParams = rest;
+            void _caps;
         }
-        super(shaderParams);
+        super(superParams);
         this.invalidateFog();
         this.invalidateLogarithmicDepthBuffer(
             params?.rendererCapabilities.logarithmicDepthBuffer as boolean

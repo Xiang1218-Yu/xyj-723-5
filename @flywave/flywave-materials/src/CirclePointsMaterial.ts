@@ -86,10 +86,13 @@ export class CirclePointsMaterial extends RawShaderMaterial {
     constructor(parameters?: CirclePointsMaterialParameters) {
         const defaultColor = new THREE.Color();
         const defaultOpacity = 1.0;
-        let sizeValue, colorValue, opacityValue;
+        let sizeValue: number | undefined;
+        let colorValue: THREE.Color | undefined;
+        let opacityValue: number | undefined;
         let shaderParameters: RawShaderMaterialParameters | undefined;
         if (parameters) {
-            const { size, color, opacity, ...shaderParams } = parameters;
+            const { size, color, opacity, ...restParams } = parameters;
+            const shaderParams = restParams as RawShaderMaterialParameters;
             sizeValue = size;
             colorValue = color;
             opacityValue = opacity;

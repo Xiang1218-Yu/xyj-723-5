@@ -3,9 +3,27 @@
 import * as THREE from "three";
 
 /**
+ * Uniforms declared by the {@link LuminosityHighPassShader} program.
+ */
+export interface LuminosityHighPassShaderUniforms {
+    tDiffuse: THREE.IUniform<THREE.Texture | null>;
+    luminosityThreshold: THREE.IUniform<number>;
+    smoothWidth: THREE.IUniform<number>;
+    defaultColor: THREE.IUniform<THREE.Color>;
+    defaultOpacity: THREE.IUniform<number>;
+}
+
+/**
+ * `LuminosityHighPassShader` parameters with strongly-typed uniforms.
+ */
+export type LuminosityHighPassShaderParameters = THREE.ShaderMaterialParameters & {
+    uniforms: LuminosityHighPassShaderUniforms;
+};
+
+/**
  * The shader used in the [[UnrealBloomPass]] for the bloom/glow effect.
  */
-export const LuminosityHighPassShader: THREE.ShaderMaterialParameters = {
+export const LuminosityHighPassShader: LuminosityHighPassShaderParameters = {
     uniforms: {
         tDiffuse: { value: null },
         luminosityThreshold: { value: 1.0 },

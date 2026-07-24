@@ -18,6 +18,7 @@ import {
     type RendererMaterialParameters,
     RawShaderMaterial
 } from "./RawShaderMaterial";
+import { type ShaderDefines } from "./ShaderTypes";
 import { enforceBlending, setShaderDefine, setShaderMaterialDefine } from "./Utils";
 
 const vertexSource: string = `
@@ -164,7 +165,7 @@ export class EdgeMaterial
     constructor(params?: EdgeMaterialParameters) {
         let shaderParams: RawShaderMaterialParameters | undefined;
         if (params) {
-            const defines: Record<string, any> = {};
+            const defines: ShaderDefines = {};
             const hasExtrusion =
                 params.extrusionRatio !== undefined &&
                 params.extrusionRatio >= ExtrusionFeatureDefs.DEFAULT_RATIO_MIN &&
@@ -211,7 +212,7 @@ export class EdgeMaterial
                 // Color may be set directly on object (omitting class setter), because we already
                 // know that is does no require any special handling nor material update
                 // (see: set color()).
-                this.color.set(params.color as any);
+                this.color.set(params.color as THREE.ColorRepresentation);
             }
             if (params.colorMix !== undefined) {
                 this.colorMix = params.colorMix;
@@ -348,11 +349,11 @@ export class EdgeMaterial
         setShaderMaterialDefine(this, "USE_DISPLACEMENTMAP", useDisplacementMap);
     }
 
-    get displacementMapUvMatrix() {
+    get displacementMapUvMatrix(): THREE.Matrix3 | undefined {
         return this.uniforms.displacementMapUvMatrix.value;
     }
 
-    set displacementMapUvMatrix(matrix) {
+    set displacementMapUvMatrix(matrix: THREE.Matrix3 | undefined) {
         this.uniforms.displacementMapUvMatrix.value = matrix;
     }
 }

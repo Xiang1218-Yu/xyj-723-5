@@ -24,6 +24,13 @@ export interface FixedSizeArrowOptions {
  * Inherits from THREE.Object3D, maintains fixed size in screen space
  */
 export class FixedSizeArrow extends THREE.Object3D {
+    /**
+     * Type discriminator used by {@link FixedSizeArrowSystem} to identify
+     * `FixedSizeArrow` instances without `instanceof` (which breaks across
+     * bundle boundaries / realms).
+     */
+    public readonly isFixedSizeArrow: true = true;
+
     // Default options
     private static readonly DEFAULT_OPTIONS: FixedSizeArrowOptions = {
         size: 40,
@@ -38,8 +45,8 @@ export class FixedSizeArrow extends THREE.Object3D {
     private _headColor: THREE.Color;
     private _shaftColor: THREE.Color;
     private _opacity: number;
-    private _headMesh: THREE.Mesh | null = null;
-    private _shaftMesh: THREE.Mesh | null = null;
+    private _headMesh: THREE.Mesh<THREE.ConeGeometry, THREE.MeshBasicMaterial> | null = null;
+    private _shaftMesh: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial> | null = null;
     private readonly _options: FixedSizeArrowOptions;
 
     /**
@@ -59,9 +66,6 @@ export class FixedSizeArrow extends THREE.Object3D {
 
         // Create arrow geometry
         this.createArrowGeometry();
-
-        // Mark as fixed size object
-        (this as any).isFixedSizeArrow = true;
     }
 
     /**
@@ -231,24 +235,12 @@ export class FixedSizeArrow extends THREE.Object3D {
     public dispose(): void {
         if (this._headMesh) {
             this._headMesh.geometry.dispose();
-            if (Array.isArray(this._headMesh.material)) {
-                this._headMesh.material.forEach(material => {
-                    material.dispose();
-                });
-            } else {
-                this._headMesh.material.dispose();
-            }
+            this._headMesh.material.dispose();
         }
 
         if (this._shaftMesh) {
             this._shaftMesh.geometry.dispose();
-            if (Array.isArray(this._shaftMesh.material)) {
-                this._shaftMesh.material.forEach(material => {
-                    material.dispose();
-                });
-            } else {
-                this._shaftMesh.material.dispose();
-            }
+            this._shaftMesh.material.dispose();
         }
 
         this.clear();
@@ -319,7 +311,7 @@ export class FixedSizeArrowSystem {
         if (!this._camera) return;
 
         this._arrows.forEach(arrow => {
-            if ((arrow as any).isFixedSizeArrow) {
+            if (arrow.isFixedSizeArrow) {
                 arrow.updateSize(this._camera!, this._renderer);
             }
         });

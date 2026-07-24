@@ -3,9 +3,28 @@
 import type * as THREE from "three";
 
 /**
+ * Uniforms declared by the {@link SepiaShader} program.
+ */
+export interface SepiaShaderUniforms {
+    tDiffuse: THREE.IUniform<THREE.Texture | null>;
+    amount: THREE.IUniform<number>;
+}
+
+/**
+ * `SepiaShader` parameters with strongly-typed uniforms.
+ *
+ * @remarks
+ * Replaces the previous untyped `THREE.ShaderMaterialParameters` constant so
+ * consumers can access `uniforms.amount.value` without `any` casts.
+ */
+export type SepiaShaderParameters = THREE.ShaderMaterialParameters & {
+    uniforms: SepiaShaderUniforms;
+};
+
+/**
  * `SepiaShader`.
  */
-export const SepiaShader: THREE.ShaderMaterialParameters = {
+export const SepiaShader: SepiaShaderParameters = {
     uniforms: {
         tDiffuse: { value: null },
         amount: { value: 1.0 }

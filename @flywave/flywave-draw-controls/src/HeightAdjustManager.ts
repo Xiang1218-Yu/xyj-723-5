@@ -7,6 +7,7 @@ import * as THREE from "three";
 
 import { HeightHandle } from "./HeightHandle";
 import { type PointObject } from "./PointObject";
+import { type VertexContainer } from "./DrawTypes";
 
 export class HeightAdjustManager extends THREE.Object3D {
     private readonly mapView: MapView;
@@ -122,8 +123,15 @@ export class HeightAdjustManager extends THREE.Object3D {
         return position;
     }
 
-    public attachToLineVertex(line: any, vertexIndex: number): void {
-        if (!line || !line.getVertexPoints || vertexIndex < 0) {
+    /**
+     * Attach the height handle to a specific vertex of a {@link VertexContainer}
+     * (i.e. a {@link DrawLine} or {@link DrawPolygon}).
+     *
+     * @param line - Object exposing vertex control points.
+     * @param vertexIndex - Index of the vertex to attach to.
+     */
+    public attachToLineVertex(line: VertexContainer, vertexIndex: number): void {
+        if (vertexIndex < 0) {
             this.detach();
             return;
         }
@@ -135,7 +143,7 @@ export class HeightAdjustManager extends THREE.Object3D {
         }
 
         const vertexPoint = vertexPoints[vertexIndex];
-        this.attachToPoint(vertexPoint);
+        this.attachToPoint(vertexPoint as PointObject);
     }
 
     // Start height adjustment

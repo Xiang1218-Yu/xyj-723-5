@@ -3,6 +3,8 @@
 import { assert } from "@flywave/flywave-utils";
 import * as THREE from "three";
 
+import { type ShaderDefines, type ShaderDefineValue } from "./ShaderTypes";
+
 /**
  * Values for boolean shader defines
  */
@@ -42,7 +44,7 @@ export interface ForcedBlending {
 
 /**
  * THREE.js is enabling blending only when transparent is `true` or when a blend mode
- * different than `NormalBlending` is set.
+ * different than NormalBlending is set.
  * Since we don't want to set transparent to true and mess up the render order we set
  * `CustomBlending` with the same parameters as the `NormalBlending`.
 
@@ -146,7 +148,7 @@ export function disableBlending(
 export function setShaderMaterialDefine(
     material: THREE.ShaderMaterial,
     key: string,
-    value: boolean | number
+    value: ShaderDefineValue
 ): boolean {
     assert(
         material.defines !== undefined,
@@ -158,7 +160,7 @@ export function setShaderMaterialDefine(
     if (!needsUpdate) {
         return false;
     }
-    setShaderDefine(material.defines, key, value);
+    setShaderDefine(material.defines as ShaderDefines, key, value);
     material.needsUpdate = needsUpdate;
     return true;
 }
@@ -181,12 +183,12 @@ export function setShaderMaterialDefine(
 export function getShaderMaterialDefine(
     material: THREE.ShaderMaterial,
     key: string,
-    fallbackValue: boolean | number = false
-): boolean | number {
+    fallbackValue: ShaderDefineValue = false
+): ShaderDefineValue {
     if (material.defines === undefined) {
         return fallbackValue;
     }
-    return getShaderDefine(material.defines, key);
+    return getShaderDefine(material.defines as ShaderDefines, key);
 }
 
 /**
@@ -203,9 +205,9 @@ export function getShaderMaterialDefine(
  * @see setShaderMaterialDefine.
  */
 export function setShaderDefine(
-    defines: Record<string, any>,
+    defines: ShaderDefines,
     key: string,
-    value: boolean | number
+    value: ShaderDefineValue
 ): boolean {
     let updated = false;
     if (typeof value === "number") {
@@ -230,7 +232,7 @@ export function setShaderDefine(
  * @param defines - The `defines` map.
  * @param key - The identifier of the _define_.
  */
-export function getShaderDefine(defines: Record<string, any>, key: string): boolean | number {
+export function getShaderDefine(defines: ShaderDefines, key: string): ShaderDefineValue {
     const currentValue = defines[key];
     const semanticValue =
         currentValue === DEFINE_BOOL_FALSE
@@ -238,5 +240,5 @@ export function getShaderDefine(defines: Record<string, any>, key: string): bool
             : currentValue === DEFINE_BOOL_TRUE
             ? true
             : currentValue;
-    return semanticValue;
+    return semanticValue as ShaderDefineValue;
 }

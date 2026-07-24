@@ -106,7 +106,7 @@ export class HighPrecisionPointMaterial extends THREE.PointsMaterial {
         // Apply initial parameter values.
         if (params !== undefined) {
             if (params.color !== undefined) {
-                this.color.set(params.color as any);
+                this.color.set(params.color as THREE.ColorRepresentation);
             }
             if (params.opacity !== undefined) {
                 this.opacity = params.opacity;

@@ -11,18 +11,28 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 
 import { DrawableObject } from "./DrawableObject";
+import { drawMaterialFactory, type DrawMaterialFactory } from "./DrawMaterials";
 import { PointObject } from "./PointObject";
+import { type DrawGeoJsonGeometry } from "./DrawTypes";
 
 export class DrawPolygon extends DrawableObject {
     // Change private properties to protected properties so that subclasses can access them
     protected mesh: THREE.Mesh;
+    protected meshMaterial: THREE.MeshPhongMaterial;
     protected outline: Line2;
+    protected outlineGeometry: LineGeometry;
+    protected outlineMaterial: LineMaterial;
+    protected materialFactory: DrawMaterialFactory = drawMaterialFactory;
     protected fillColor: number = 0x00ff00;
     protected outlineColor: number = 0x0000ff;
     protected opacity: number = 0.6;
     protected verticesPoints: PointObject[] = [];
     protected edges: Line2[] = [];
+    protected edgeGeometries: LineGeometry[] = [];
+    protected edgeMaterials: LineMaterial[] = [];
     protected outlineEdges: Line2[] = [];
+    protected outlineEdgeGeometries: LineGeometry[] = [];
+    protected outlineEdgeMaterials: LineMaterial[] = [];
 
     constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
         super(mapView, id);
@@ -30,16 +40,16 @@ export class DrawPolygon extends DrawableObject {
 
         // Create face geometry
         const geometry = new THREE.BufferGeometry();
-        const material = this.createPolygonMaterial(this.fillColor, this.opacity);
+        this.meshMaterial = this.createPolygonMaterial(this.fillColor, this.opacity);
 
-        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh = new THREE.Mesh(geometry, this.meshMaterial);
         this.mesh.renderOrder = 0;
 
         // Create outline line
-        const outlineGeometry = new LineGeometry();
-        const outlineMaterial = this.createOutlineMaterial(this.outlineColor);
+        this.outlineGeometry = new LineGeometry();
+        this.outlineMaterial = this.createOutlineMaterial(this.outlineColor);
 
-        this.outline = new Line2(outlineGeometry, outlineMaterial);
+        this.outline = new Line2(this.outlineGeometry, this.outlineMaterial);
         this.outline.renderOrder = 2;
 
         this.add(this.mesh);
@@ -54,46 +64,31 @@ export class DrawPolygon extends DrawableObject {
 
     // Change the material creation method to an overloadable method
     protected createPolygonMaterial(color: number, opacity: number): THREE.MeshPhongMaterial {
-        return new THREE.MeshPhongMaterial({
-            color,
-            opacity,
-            transparent: true,
-            side: THREE.DoubleSide,
-            specular: 0x111111,
-            shininess: 30
-        });
+        return this.materialFactory.createPolygonMaterial({ color, opacity });
     }
 
     // Change the outline material creation method to an overloadable method
     protected createOutlineMaterial(color: number): LineMaterial {
-        return new LineMaterial({
-            color,
-            linewidth: 3,
-            dashed: false,
-            opacity: 1.0,
-            transparent: true
-        });
+        return this.materialFactory.createLineMaterial({ color, linewidth: 3 });
     }
 
     private createEdges(): void {
         // Clean up existing edges
         this.edges.forEach(edge => this.remove(edge));
         this.edges = [];
+        this.edgeGeometries = [];
+        this.edgeMaterials = [];
 
         // Create Line2 objects for each edge
         for (let i = 0; i < this.vertices.length; i++) {
             const geometry = new LineGeometry();
-            const material = new LineMaterial({
-                color: 0x888888,
-                linewidth: 1,
-                dashed: false,
-                opacity: 1.0,
-                transparent: true
-            });
+            const material = this.materialFactory.createEdgeLineMaterial();
 
             const line = new Line2(geometry, material);
             line.renderOrder = 1;
             this.edges.push(line);
+            this.edgeGeometries.push(geometry);
+            this.edgeMaterials.push(material);
             this.add(line);
         }
     }
@@ -102,6 +97,8 @@ export class DrawPolygon extends DrawableObject {
         // Clean up existing outline edges
         this.outlineEdges.forEach(edge => this.remove(edge));
         this.outlineEdges = [];
+        this.outlineEdgeGeometries = [];
+        this.outlineEdgeMaterials = [];
 
         for (let i = 0; i < this.vertices.length; i++) {
             const geometry = new LineGeometry();
@@ -116,23 +113,15 @@ export class DrawPolygon extends DrawableObject {
             line.raycast = () => {}; // Empty function, disable ray detection
 
             this.outlineEdges.push(line);
+            this.outlineEdgeGeometries.push(geometry);
+            this.outlineEdgeMaterials.push(material);
             this.add(line);
         }
     }
 
     // Change the outline edge material creation method to an overloadable method
     protected createOutlineEdgeMaterial(): LineMaterial {
-        return new LineMaterial({
-            color: 0xffd700,
-            linewidth: 2,
-            dashed: true,
-            dashSize: 0.6,
-            gapSize: 0.3,
-            depthTest: false,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.8
-        });
+        return this.materialFactory.createOutlineEdgeMaterial();
     }
 
     protected updateOutline(): void {
@@ -153,8 +142,8 @@ export class DrawPolygon extends DrawableObject {
                 worldVertices[nextIndex].z
             ];
 
-            if (i < this.outlineEdges.length) {
-                (this.outlineEdges[i].geometry as LineGeometry).setPositions(positions);
+            if (i < this.outlineEdgeGeometries.length) {
+                this.outlineEdgeGeometries[i].setPositions(positions);
             }
         }
     }
@@ -250,7 +239,7 @@ export class DrawPolygon extends DrawableObject {
         // Update outline line
         const outlineVertices = [...worldVertices, worldVertices[0]];
         const outlinePositions = outlineVertices.flatMap(v => [v.x, v.y, v.z]);
-        (this.outline.geometry as LineGeometry).setPositions(outlinePositions);
+        this.outlineGeometry.setPositions(outlinePositions);
 
         // Update edges
         for (let i = 0; i < this.edges.length; i++) {
@@ -264,7 +253,7 @@ export class DrawPolygon extends DrawableObject {
                     worldVertices[nextIndex].y,
                     worldVertices[nextIndex].z
                 ];
-                (this.edges[i].geometry as LineGeometry).setPositions(edgePositions);
+                this.edgeGeometries[i].setPositions(edgePositions);
             }
         }
 
@@ -307,26 +296,23 @@ export class DrawPolygon extends DrawableObject {
     }
 
     protected updateVisuals(): void {
-        const meshMaterial = this.mesh.material as THREE.MeshPhongMaterial;
-        const outlineMaterial = this.outline.material as LineMaterial;
-
         if (this.isSelected) {
-            meshMaterial.color.set(0x00ff00);
-            meshMaterial.emissive.set(0x00ff00);
-            meshMaterial.emissiveIntensity = 0.3;
-            outlineMaterial.color.set(0xffff00);
-            meshMaterial.opacity = 0.8;
-            outlineMaterial.linewidth = 4;
+            this.meshMaterial.color.set(0x00ff00);
+            this.meshMaterial.emissive.set(0x00ff00);
+            this.meshMaterial.emissiveIntensity = 0.3;
+            this.outlineMaterial.color.set(0xffff00);
+            this.meshMaterial.opacity = 0.8;
+            this.outlineMaterial.linewidth = 4;
 
             // When the object is selected, all vertices are also displayed as selected
             this.verticesPoints.forEach(point => {
                 point.setSelected(true);
             });
         } else {
-            meshMaterial.color.set(this.fillColor);
-            outlineMaterial.color.set(this.outlineColor);
-            meshMaterial.opacity = this.opacity;
-            outlineMaterial.linewidth = 3;
+            this.meshMaterial.color.set(this.fillColor);
+            this.outlineMaterial.color.set(this.outlineColor);
+            this.meshMaterial.opacity = this.opacity;
+            this.outlineMaterial.linewidth = 3;
 
             // When the object is deselected, all vertices are also deselected
             this.verticesPoints.forEach(point => {
@@ -336,41 +322,39 @@ export class DrawPolygon extends DrawableObject {
         }
     }
 
-    public toGeoJSON(): any {
+    public toGeoJSON(): DrawGeoJsonGeometry {
         return {
             type: "Polygon",
-            coordinates: [
-                this.vertices.map(vertex => [
-                    vertex.longitude,
-                    vertex.latitude,
-                    vertex.altitude || 0
-                ])
-            ]
+            coordinates: [this.vertices.map(v => [v.longitude, v.latitude, v.altitude ?? 0] as [number, number, number])]
         };
     }
 
     public dispose(): void {
         // Clean up outline edges
-        this.outlineEdges.forEach(edge => {
+        this.outlineEdges.forEach((edge, i) => {
             this.remove(edge);
-            edge.geometry.dispose();
-            (edge.material as THREE.Material).dispose();
+            this.outlineEdgeGeometries[i]?.dispose();
+            this.outlineEdgeMaterials[i]?.dispose();
         });
         this.outlineEdges = [];
+        this.outlineEdgeGeometries = [];
+        this.outlineEdgeMaterials = [];
 
         // Clean up edges
-        this.edges.forEach(edge => {
+        this.edges.forEach((edge, i) => {
             this.remove(edge);
-            edge.geometry.dispose();
-            (edge.material as THREE.Material).dispose();
+            this.edgeGeometries[i]?.dispose();
+            this.edgeMaterials[i]?.dispose();
         });
         this.edges = [];
+        this.edgeGeometries = [];
+        this.edgeMaterials = [];
 
         // Clean up other resources
         this.mesh.geometry.dispose();
-        (this.mesh.material as THREE.Material).dispose();
-        this.outline.geometry.dispose();
-        (this.outline.material as THREE.Material).dispose();
+        this.meshMaterial.dispose();
+        this.outlineGeometry.dispose();
+        this.outlineMaterial.dispose();
 
         this.verticesPoints.forEach(point => {
             point.dispose();

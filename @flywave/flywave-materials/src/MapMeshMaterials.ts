@@ -5,6 +5,7 @@ import * as THREE from "three";
 
 import { type DisplacementFeatureParameters, DisplacementFeature } from "./DisplacementFeature";
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
+import { type ShaderCompileCallback, type ShaderDefines, type UniformsMap } from "./ShaderTypes";
 import extrusionShaderChunk from "./ShaderChunks/ExtrusionChunks";
 import fadingShaderChunk from "./ShaderChunks/FadingChunks";
 import { simpleLightingShadowChunk } from "./ShaderChunks/ShadowChunks";
@@ -73,14 +74,7 @@ export interface ExtrusionFeatureParameters {
  *
  * @hidden
  */
-export type UniformsType = Record<string, THREE.IUniform>;
-
-/**
- * Type of callback used internally by THREE.js for shader creation.
- *
- * @hidden
- */
-type CompileCallback = (shader: THREE.WebGLProgramParametersWithUniforms, renderer: any) => void;
+export type UniformsType = UniformsMap;
 
 /**
  * Material properties used from THREE, which may not be defined in the type.
@@ -107,14 +101,14 @@ export interface HiddenThreeJSMaterialProperties {
     /**
      * Used internally for material shader defines.
      */
-    defines?: any;
+    defines?: ShaderDefines;
 
     /**
      * Defines callback available in THREE.js materials.
      *
      * Called before shader program compilation to generate vertex & fragment shader output code.
      */
-    onBeforeCompile?: CompileCallback;
+    onBeforeCompile?: ShaderCompileCallback;
 }
 
 /**
@@ -126,7 +120,7 @@ export interface MixinShaderProperties {
     /**
      * Used internally for material shader defines.
      */
-    shaderDefines?: any;
+    shaderDefines?: ShaderDefines;
 
     /**
      * Used internally for shader uniforms, holds references to material internal shader.uniforms.
@@ -137,7 +131,7 @@ export interface MixinShaderProperties {
      * feature enabled.
      * @see needsUpdate
      */
-    shaderUniforms?: UniformsType;
+    shaderUniforms?: UniformsMap;
 }
 
 /**
@@ -244,8 +238,8 @@ export interface ExtrusionFeature extends HiddenThreeJSMaterialProperties, Mixin
  * @param material The material to check.
  * @returns Whether the given material supports extrusion.
  */
-export function hasExtrusionFeature(material: any): material is ExtrusionFeature {
-    return "extrusionRatio" in material;
+export function hasExtrusionFeature(material: unknown): material is ExtrusionFeature {
+    return typeof material === "object" && material !== null && "extrusionRatio" in material;
 }
 
 // See https://github.com/typescript-eslint/typescript-eslint/blob/master/packages/eslint-plugin/docs/rules/no-redeclare.md#ignoredeclarationmerge
@@ -340,10 +334,10 @@ namespace DisplacementFeature {
 export class DisplacementFeatureMixin implements DisplacementFeature, MixinShaderProperties {
     needsUpdate?: boolean;
     uniformsNeedUpdate?: boolean;
-    defines?: any;
-    shaderDefines?: any;
-    shaderUniforms?: UniformsType;
-    onBeforeCompile?: CompileCallback;
+    defines?: ShaderDefines;
+    shaderDefines?: ShaderDefines;
+    shaderUniforms?: UniformsMap;
+    onBeforeCompile?: ShaderCompileCallback;
     private m_displacementMap: THREE.Texture | null = null;
 
     get displacementMap(): THREE.Texture | null {
@@ -467,8 +461,8 @@ export namespace FadingFeature {
      * Patch the THREE.ShaderChunk on first call with some extra shader chunks.
      */
     export function patchGlobalShaderChunks() {
-        //@ts-ignore
-        if (THREE.ShaderChunk["fading_pars_vertex"] === undefined) {
+        const shaderChunk = THREE.ShaderChunk as Record<string, string | undefined>;
+        if (shaderChunk["fading_pars_vertex"] === undefined) {
             Object.assign(THREE.ShaderChunk, fadingShaderChunk);
         }
     }
@@ -625,10 +619,10 @@ export namespace FadingFeature {
 export class FadingFeatureMixin implements FadingFeature {
     needsUpdate?: boolean;
     uniformsNeedUpdate?: boolean;
-    defines?: any;
-    shaderDefines?: any;
-    shaderUniforms?: UniformsType;
-    onBeforeCompile?: CompileCallback;
+    defines?: ShaderDefines;
+    shaderDefines?: ShaderDefines;
+    shaderUniforms?: UniformsMap;
+    onBeforeCompile?: ShaderCompileCallback;
     private m_fadeNear: number = FadingFeature.DEFAULT_FADE_NEAR;
     private m_fadeFar: number = FadingFeature.DEFAULT_FADE_FAR;
 
@@ -730,8 +724,8 @@ export namespace ExtrusionFeature {
      * Patch the THREE.ShaderChunk on first call with some extra shader chunks.
      */
     export function patchGlobalShaderChunks() {
-        //@ts-ignore
-        if (THREE.ShaderChunk["extrusion_pars_vertex"] === undefined) {
+        const shaderChunk = THREE.ShaderChunk as Record<string, string | undefined>;
+        if (shaderChunk["extrusion_pars_vertex"] === undefined) {
             Object.assign(THREE.ShaderChunk, extrusionShaderChunk);
         }
     }
@@ -827,10 +821,10 @@ export namespace ExtrusionFeature {
 export class ExtrusionFeatureMixin implements ExtrusionFeature {
     needsUpdate?: boolean;
     uniformsNeedUpdate?: boolean;
-    defines?: any;
-    shaderDefines?: any;
-    shaderUniforms?: UniformsType;
-    onBeforeCompile?: CompileCallback;
+    defines?: ShaderDefines;
+    shaderDefines?: ShaderDefines;
+    shaderUniforms?: UniformsMap;
+    onBeforeCompile?: ShaderCompileCallback;
     private m_extrusion: number = ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
 
     protected getExtrusionRatio(): number {
@@ -931,10 +925,10 @@ export class MapMeshBasicMaterial
     }
 
     clone(): this {
-        return new MapMeshBasicMaterial().copy(this);
+        return new MapMeshBasicMaterial().copy(this) as this;
     }
 
-    copy(source: this): any {
+    copy(source: this): this {
         super.copy(source);
         this.copyFadingParameters(source);
         this.copyExtrusionParameters(source);
@@ -1044,10 +1038,10 @@ export class MapMeshStandardMaterial
     }
 
     clone(): this {
-        return new MapMeshStandardMaterial().copy(this);
+        return new MapMeshStandardMaterial().copy(this) as this;
     }
 
-    copy(source: this): any {
+    copy(source: this): this {
         super.copy(source);
         this.copyFadingParameters(source);
         this.copyExtrusionParameters(source);

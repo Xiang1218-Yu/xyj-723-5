@@ -3,6 +3,8 @@
 import {
     type Feature,
     type FeatureCollection,
+    type FeatureGeometry,
+    type GeometryCollection,
     type GeoJson
 } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
@@ -16,6 +18,16 @@ import { DrawMode } from "./DrawMode";
 import { DrawPolygon } from "./DrawPolygon";
 import { MapDrawControls } from "./MapDrawControls";
 import { PointObject } from "./PointObject";
+import {
+    type TypedLineStringGeometry,
+    type TypedPointGeometry,
+    type TypedPolygonGeometry,
+    coordsToGeoCoordinates,
+    coordToGeoCoordinates,
+    isLineStringGeometry,
+    isPointGeometry,
+    isPolygonGeometry
+} from "./DrawTypes";
 
 /**
  * GeoJSON drawing controls class
@@ -119,19 +131,30 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Geometry object
      * @returns DrawableObject instance
      */
-    private createObjectFromGeometry(geometry: any): DrawableObject | null {
+    private createObjectFromGeometry(geometry: FeatureGeometry | GeometryCollection): DrawableObject | null {
         try {
+            if (geometry.type === "GeometryCollection") {
+                console.warn("GeometryCollection is not supported");
+                return null;
+            }
+
             let object: DrawableObject | null = null;
 
             switch (geometry.type) {
                 case "Point":
-                    object = this.createPointFromGeometry(geometry);
+                    if (isPointGeometry(geometry)) {
+                        object = this.createPointFromGeometry(geometry);
+                    }
                     break;
                 case "LineString":
-                    object = this.createLineFromGeometry(geometry);
+                    if (isLineStringGeometry(geometry)) {
+                        object = this.createLineFromGeometry(geometry);
+                    }
                     break;
                 case "Polygon":
-                    object = this.createPolygonFromGeometry(geometry);
+                    if (isPolygonGeometry(geometry)) {
+                        object = this.createPolygonFromGeometry(geometry);
+                    }
                     break;
                 default:
                     console.warn(`Unsupported geometry type: ${geometry.type}`);
@@ -150,18 +173,13 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Point geometry data
      * @returns PointObject instance
      */
-    private createPointFromGeometry(geometry: any): PointObject | null {
-        if (!geometry || geometry.type !== "Point" || !geometry.coordinates) {
+    private createPointFromGeometry(geometry: TypedPointGeometry): PointObject | null {
+        if (!geometry || !geometry.coordinates) {
             return null;
         }
 
         try {
-            const coordinates = geometry.coordinates;
-            const position = new GeoCoordinates(
-                coordinates[1], // latitude
-                coordinates[0], // longitude
-                coordinates[2] || 0 // altitude
-            );
+            const position = coordToGeoCoordinates(geometry.coordinates);
 
             return new PointObject(this.mapView, position);
         } catch (error) {
@@ -175,19 +193,13 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry LineString geometry data
      * @returns DrawLine instance
      */
-    private createLineFromGeometry(geometry: any): DrawLine | null {
-        if (!geometry || geometry.type !== "LineString" || !geometry.coordinates) {
+    private createLineFromGeometry(geometry: TypedLineStringGeometry): DrawLine | null {
+        if (!geometry || !geometry.coordinates) {
             return null;
         }
 
         try {
-            const vertices = geometry.coordinates.map((coord: number[]) => {
-                return new GeoCoordinates(
-                    coord[1], // latitude
-                    coord[0], // longitude
-                    coord[2] || 0 // altitude
-                );
-            });
+            const vertices = coordsToGeoCoordinates(geometry.coordinates);
 
             return new DrawLine(this.mapView, vertices);
         } catch (error) {
@@ -201,20 +213,14 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Polygon geometry data
      * @returns DrawPolygon instance
      */
-    private createPolygonFromGeometry(geometry: any): DrawPolygon | null {
-        if (!geometry || geometry.type !== "Polygon" || !geometry.coordinates) {
+    private createPolygonFromGeometry(geometry: TypedPolygonGeometry): DrawPolygon | null {
+        if (!geometry || !geometry.coordinates) {
             return null;
         }
 
         try {
             // Only use the first ring (outer ring), ignore inner rings
-            const vertices = geometry.coordinates[0].map((coord: number[]) => {
-                return new GeoCoordinates(
-                    coord[1], // latitude
-                    coord[0], // longitude
-                    coord[2] || 0 // altitude
-                );
-            });
+            const vertices = coordsToGeoCoordinates(geometry.coordinates[0]);
 
             return new DrawPolygon(this.mapView, vertices);
         } catch (error) {
@@ -281,42 +287,29 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param object Existing object
      * @param geometry Geometry data
      */
-    private updateObjectFromGeometry(object: DrawableObject, geometry: any): void {
+    private updateObjectFromGeometry(object: DrawableObject, geometry: FeatureGeometry | GeometryCollection): void {
         try {
+            if (geometry.type === "GeometryCollection") {
+                return;
+            }
+
             switch (geometry.type) {
                 case "Point":
-                    if (object instanceof PointObject && geometry.coordinates) {
-                        const coordinates = geometry.coordinates;
-                        const newPosition = new GeoCoordinates(
-                            coordinates[1], // latitude
-                            coordinates[0], // longitude
-                            coordinates[2] || 0 // altitude
-                        );
+                    if (object instanceof PointObject && isPointGeometry(geometry) && geometry.coordinates) {
+                        const newPosition = coordToGeoCoordinates(geometry.coordinates);
                         object.moveTo(newPosition);
                     }
                     break;
                 case "LineString":
-                    if (object instanceof DrawLine && geometry.coordinates) {
-                        const vertices = geometry.coordinates.map((coord: number[]) => {
-                            return new GeoCoordinates(
-                                coord[1], // latitude
-                                coord[0], // longitude
-                                coord[2] || 0 // altitude
-                            );
-                        });
+                    if (object instanceof DrawLine && isLineStringGeometry(geometry) && geometry.coordinates) {
+                        const vertices = coordsToGeoCoordinates(geometry.coordinates);
                         object.setVertices(vertices);
                     }
                     break;
                 case "Polygon":
-                    if (object instanceof DrawPolygon && geometry.coordinates) {
+                    if (object instanceof DrawPolygon && isPolygonGeometry(geometry) && geometry.coordinates) {
                         // Only use the first ring (outer ring), ignore inner rings
-                        const vertices = geometry.coordinates[0].map((coord: number[]) => {
-                            return new GeoCoordinates(
-                                coord[1], // latitude
-                                coord[0], // longitude
-                                coord[2] || 0 // altitude
-                            );
-                        });
+                        const vertices = coordsToGeoCoordinates(geometry.coordinates[0]);
                         object.setVertices(vertices);
                     }
                     break;

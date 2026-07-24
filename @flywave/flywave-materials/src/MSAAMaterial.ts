@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 
-import { CopyShader } from "./CopyMaterial";
+import { CopyShader, type CopyShaderUniforms } from "./CopyMaterial";
 
 /**
  * The material to use for the quad of the {@link @flywave/flywave-mapview#MSAARenderPass}
@@ -12,11 +12,11 @@ export class MSAAMaterial extends THREE.ShaderMaterial {
     /**
      * The constructor of `MSAAMaterial`.
      *
-     * @param uniforms - The [[CopyShader]]'s uniforms.
+     * @param uniforms - The {@link CopyShader}'s uniforms.
      */
-    constructor(uniforms: Record<string, THREE.IUniform>) {
+    constructor(uniforms: CopyShaderUniforms) {
         super({
-            uniforms,
+            uniforms: uniforms as unknown as Record<string, THREE.IUniform>,
             vertexShader: CopyShader.vertexShader,
             fragmentShader: CopyShader.fragmentShader,
             premultipliedAlpha: true,
