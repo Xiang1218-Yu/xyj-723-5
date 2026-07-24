@@ -8,7 +8,9 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 
 import { DrawableObject } from "./DrawableObject";
+import { drawMaterialFactory, type DrawMaterialFactory } from "./DrawMaterials";
 import { PointObject } from "./PointObject";
+import { type DrawGeoJsonGeometry } from "./DrawTypes";
 
 export class DrawLine extends DrawableObject {
     protected outlineLine: Line2 | null = null;
@@ -20,14 +22,28 @@ export class DrawLine extends DrawableObject {
     protected lineColor: number = 0xffff00;
     protected vertexPoints: PointObject[] = [];
 
+    /**
+     * Centralised material factory used to create line/outline materials.
+     * Subclasses (e.g. {@link MeasureLine}) may replace this with a custom
+     * factory to override material creation without touching the draw logic.
+     */
+    protected materialFactory: DrawMaterialFactory = drawMaterialFactory;
+
+    /** Strongly-typed reference to the main line geometry (avoids repeated casts). */
+    protected lineGeometry!: LineGeometry;
+    /** Strongly-typed reference to the main line material (avoids repeated casts). */
+    protected lineMaterial!: LineMaterial;
+    /** Strongly-typed reference to the outline line material (avoids repeated casts). */
+    protected outlineLineMaterial!: LineMaterial;
+
     constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
         super(mapView, id);
         this.vertices = vertices;
 
-        const geometry = new LineGeometry();
-        const material = this.createLineMaterial(this.lineColor, this.baseLineWidth);
+        this.lineGeometry = new LineGeometry();
+        this.lineMaterial = this.createLineMaterial(this.lineColor, this.baseLineWidth);
 
-        this.line = new Line2(geometry, material);
+        this.line = new Line2(this.lineGeometry, this.lineMaterial);
         this.line.renderOrder = 1;
 
         this.lineContainer = new THREE.Object3D();
@@ -46,15 +62,7 @@ export class DrawLine extends DrawableObject {
      * @returns LineMaterial instance
      */
     protected createLineMaterial(color: number, linewidth: number): LineMaterial {
-        return new LineMaterial({
-            color,
-            linewidth,
-            dashed: false,
-            opacity: 1.0,
-            depthTest: false,
-            transparent: true,
-            alphaToCoverage: true
-        });
+        return this.materialFactory.createMainLineMaterial(color, linewidth);
     }
 
     /**
@@ -175,8 +183,7 @@ export class DrawLine extends DrawableObject {
         });
 
         const vertices = positions.flatMap(pos => [pos.x, pos.y, pos.z]);
-        const geometry = this.line.geometry as LineGeometry;
-        geometry.setPositions(vertices);
+        this.lineGeometry.setPositions(vertices);
 
         // Ensure the number of vertex visualization points matches
         if (this.vertexPoints.length !== this.vertices.length) {
@@ -227,18 +234,17 @@ export class DrawLine extends DrawableObject {
      * Update line visual effects
      */
     protected updateVisuals(): void {
-        const material = this.line.material as LineMaterial;
         if (this.isSelected) {
-            material.color.set(0x00ff00);
-            material.linewidth = this.baseLineWidth * 2;
+            this.lineMaterial.color.set(0x00ff00);
+            this.lineMaterial.linewidth = this.baseLineWidth * 2;
 
             // When the object is selected, all vertices are also displayed as selected
             this.vertexPoints.forEach(point => {
                 point.setSelected(true);
             });
         } else {
-            material.color.set(this.lineColor);
-            material.linewidth = this.baseLineWidth;
+            this.lineMaterial.color.set(this.lineColor);
+            this.lineMaterial.linewidth = this.baseLineWidth;
 
             // When the object is deselected, all vertices are also deselected
             this.vertexPoints.forEach(point => {
@@ -252,14 +258,10 @@ export class DrawLine extends DrawableObject {
      * Convert to GeoJSON format
      * @returns GeoJSON object
      */
-    public toGeoJSON(): any {
+    public toGeoJSON(): DrawGeoJsonGeometry {
         return {
             type: "LineString",
-            coordinates: this.vertices.map(vertex => [
-                vertex.longitude,
-                vertex.latitude,
-                vertex.altitude || 0
-            ])
+            coordinates: this.vertices.map(v => [v.longitude, v.latitude, v.altitude ?? 0] as [number, number, number])
         };
     }
 
@@ -274,8 +276,8 @@ export class DrawLine extends DrawableObject {
             this.lineContainer.parent.remove(this.lineContainer);
         }
 
-        this.line.geometry.dispose();
-        (this.line.material as THREE.Material).dispose();
+        this.lineGeometry.dispose();
+        this.lineMaterial.dispose();
 
         this.vertexPoints.forEach(point => {
             point.dispose();
@@ -284,8 +286,9 @@ export class DrawLine extends DrawableObject {
 
         // Clean up outlineLine
         if (this.outlineLine) {
-            this.outlineLine.geometry.dispose();
-            (this.outlineLine.material as THREE.Material).dispose();
+            // The outline shares geometry with the main line, so only the
+            // outline's own material needs to be released here.
+            this.outlineLineMaterial.dispose();
             this.outlineLine = null;
         }
     }
@@ -303,11 +306,9 @@ export class DrawLine extends DrawableObject {
      */
     protected createOutlineObject(): void {
         // Directly use the main line's geometry to avoid repeated creation and calculation
-        const mainGeometry = this.line.geometry;
+        this.outlineLineMaterial = this.createOutlineMaterial();
 
-        const material = this.createOutlineMaterial();
-
-        this.outlineLine = new Line2(mainGeometry, material); // Share the same geometry
+        this.outlineLine = new Line2(this.lineGeometry, this.outlineLineMaterial); // Share the same geometry
         this.outlineLine.renderOrder = -10;
         this.outlineLine.raycast = () => {};
 
@@ -319,17 +320,7 @@ export class DrawLine extends DrawableObject {
      * @returns LineMaterial instance
      */
     protected createOutlineMaterial(): LineMaterial {
-        return new LineMaterial({
-            color: 0xffd700,
-            linewidth: 3,
-            dashed: true,
-            dashSize: 0.8,
-            gapSize: 0.4,
-            depthTest: false,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.8
-        });
+        return this.materialFactory.createOutlineLineMaterial();
     }
 
     /**

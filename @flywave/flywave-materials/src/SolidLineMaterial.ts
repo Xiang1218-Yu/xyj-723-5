@@ -14,6 +14,7 @@ import {
     RawShaderMaterial
 } from "./RawShaderMaterial";
 import linesShaderChunk, { LineCapsModes } from "./ShaderChunks/LinesChunks";
+import { type ShaderDefines } from "./ShaderTypes";
 import {
     enforceBlending,
     getShaderMaterialDefine,
@@ -36,7 +37,7 @@ const DefinesLineCapsMapping: Record<number, LineCaps> = Object.keys(LineCapsDef
         r[defineValue] = defineKey;
         return r;
     },
-    {} as any as Record<number, LineCaps>
+    {} as Record<number, LineCaps>
 );
 
 export enum LineDashesModes {
@@ -58,7 +59,7 @@ const DefinesLineDashesMapping: Record<number, LineDashes> = Object.keys(
     const defineValue: number = LineDashesDefinesMapping[defineKey];
     r[defineValue] = defineKey;
     return r;
-}, {} as any as Record<number, LineDashes>);
+}, {} as Record<number, LineDashes>);
 
 /**
  * The vLength contains the actual line length, it's needed for the creation of line caps by
@@ -445,7 +446,7 @@ export class SolidLineMaterial
         FadingFeature.patchGlobalShaderChunks();
 
         // Setup default defines.
-        const defines: Record<string, any> = {
+        const defines: ShaderDefines = {
             CAPS_MODE: LineCapsModes.CAPS_ROUND,
             DASHES_MODE: LineDashesModes.DASHES_SQUARE
         };
@@ -454,7 +455,7 @@ export class SolidLineMaterial
         // proper set for shader compilation, without need to re-compile.
         let fogParam = true;
         let opacityParam = 1.0;
-        let displacementMap;
+        let displacementMap: THREE.Texture | undefined;
 
         let shaderParams: RawShaderMaterialParameters | undefined;
         if (params) {
@@ -543,11 +544,11 @@ export class SolidLineMaterial
         // Apply initial parameter values.
         if (params) {
             if (params.color !== undefined) {
-                tmpColor.set(params.color as any);
+                tmpColor.set(params.color as THREE.ColorRepresentation);
                 this.color = tmpColor;
             }
             if (params.outlineColor !== undefined) {
-                tmpColor.set(params.outlineColor as any);
+                tmpColor.set(params.outlineColor as THREE.ColorRepresentation);
                 this.outlineColor = tmpColor;
             }
             if (params.lineWidth !== undefined) {
@@ -588,7 +589,7 @@ export class SolidLineMaterial
                 this.dashes = params.dashes;
             }
             if (params.dashColor !== undefined) {
-                tmpColor.set(params.dashColor as any);
+                tmpColor.set(params.dashColor as THREE.ColorRepresentation);
                 this.dashColor = tmpColor;
             }
             if (params.dashSize !== undefined) {
@@ -812,11 +813,11 @@ export class SolidLineMaterial
         setShaderMaterialDefine(this, "USE_DISPLACEMENTMAP", useDisplacementMap);
     }
 
-    get displacementMapUvMatrix() {
+    get displacementMapUvMatrix(): THREE.Matrix3 | undefined {
         return this.uniforms.displacementMapUvMatrix.value;
     }
 
-    set displacementMapUvMatrix(matrix) {
+    set displacementMapUvMatrix(matrix: THREE.Matrix3 | undefined) {
         this.uniforms.displacementMapUvMatrix.value = matrix;
     }
 

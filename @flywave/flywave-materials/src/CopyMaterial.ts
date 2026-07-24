@@ -3,10 +3,24 @@
 import * as THREE from "three";
 
 /**
+ * Uniforms declared by the {@link CopyShader} program.
+ */
+export interface CopyShaderUniforms {
+    tDiffuse: THREE.IUniform<THREE.Texture | null>;
+    opacity: THREE.IUniform<number>;
+}
+
+/**
  * The base shader to use for {@link @flywave/flywave-mapview#MapView}'s
  * composing passes, like {@link MSAAMaterial}.
+ *
+ * @remarks
+ * The uniforms object is strongly typed through {@link CopyShaderUniforms}
+ * so material classes can reference individual uniforms without `any` casts.
  */
-export const CopyShader: THREE.ShaderMaterialParameters = {
+export const CopyShader: THREE.ShaderMaterialParameters & {
+    uniforms: CopyShaderUniforms;
+} = {
     uniforms: {
         tDiffuse: { value: null },
         opacity: { value: 1.0 }
@@ -34,12 +48,12 @@ export class CopyMaterial extends THREE.ShaderMaterial {
     /**
      * The constructor of `CopyMaterial`.
      *
-     * @param uniforms - The [[CopyShader]]'s uniforms.
+     * @param uniforms - The {@link CopyShader}'s uniforms.
      */
-    constructor(uniforms: Record<string, THREE.IUniform>) {
+    constructor(uniforms: CopyShaderUniforms) {
         super({
             name: "CopyMaterial",
-            uniforms,
+            uniforms: uniforms as unknown as Record<string, THREE.IUniform>,
             vertexShader: CopyShader.vertexShader,
             fragmentShader: CopyShader.fragmentShader,
             premultipliedAlpha: true,

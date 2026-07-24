@@ -3,9 +3,25 @@
 import type * as THREE from "three";
 
 /**
+ * Uniforms declared by the {@link VignetteShader} program.
+ */
+export interface VignetteShaderUniforms {
+    tDiffuse: THREE.IUniform<THREE.Texture | null>;
+    offset: THREE.IUniform<number>;
+    darkness: THREE.IUniform<number>;
+}
+
+/**
+ * `VignetteShader` parameters with strongly-typed uniforms.
+ */
+export type VignetteShaderParameters = THREE.ShaderMaterialParameters & {
+    uniforms: VignetteShaderUniforms;
+};
+
+/**
  * `VignetteShader`.
  */
-export const VignetteShader: THREE.ShaderMaterialParameters = {
+export const VignetteShader: VignetteShaderParameters = {
     uniforms: {
         tDiffuse: { value: null },
         offset: { value: 1.0 },

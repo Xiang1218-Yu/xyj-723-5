@@ -107,7 +107,9 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
                   rendererCapabilities: params.rendererCapabilities
               }
             : undefined;
-        Object.assign(shaderParams as any, params as any);
+        if (shaderParams && params) {
+            Object.assign(shaderParams, params as RawShaderMaterialParameters);
+        }
         super(shaderParams);
 
         // this.name = "HighPrecisionLineMaterial";
@@ -116,7 +118,7 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
         // Apply initial parameter values.
         if (params) {
             if (params.color !== undefined) {
-                this.color.set(params.color as any);
+                this.color.set(params.color as THREE.ColorRepresentation);
             }
             if (params.opacity !== undefined) {
                 this.opacity = params.opacity;

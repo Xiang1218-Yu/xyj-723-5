@@ -32,7 +32,8 @@ export class HeightHandle extends THREE.Object3D {
 
         // Disable raycasting to avoid interfering with interactions of other objects
         this.raycast = () => {};
-        (this.arrow as any).raycast = () => {};
+        // Disable the arrow's raycast as well - FixedSizeArrow inherits Object3D.raycast
+        this.arrow.raycast = () => {};
 
         this.visible = false;
     }

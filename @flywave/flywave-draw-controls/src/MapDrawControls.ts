@@ -3,7 +3,7 @@
 import { type GeoJson } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates, ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapControls } from "@flywave/flywave-map-controls";
-import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
+import { type MapView, MapViewEventNames, type DataSource } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 import { EventDispatcher } from "three";
 
@@ -12,6 +12,7 @@ import { type DrawEvent, DrawEventNames } from "./DrawEventNames";
 import { DrawLine } from "./DrawLine";
 import { DrawMode } from "./DrawMode";
 import { DrawPolygon } from "./DrawPolygon";
+import { type DrawMouseEvent, type DrawWheelEvent } from "./DrawTypes";
 import { HeightAdjustManager } from "./HeightAdjustManager";
 import { PointObject } from "./PointObject";
 import { WindowEventHandler } from "@flywave/flywave-utils";
@@ -166,7 +167,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         canvas.addEventListener("wheel", this.globalEventInterceptor.bind(this), true);
 
         // Keyboard event handling
-        window.addEventListener("keydown", event => {
+        window.addEventListener("keydown", (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 this.cancelDrawing(); // This is already cancelDrawing()
             } else if (event.key === "Delete" && this.selectedObject) {
@@ -395,7 +396,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         });
     }
 
-    private onMouseDown(event): void {
+    private onMouseDown(event: DrawMouseEvent): void {
         if (this.drawMode === DrawMode.NONE) return;
 
         this.dragStartPoint.set(event.offsetX, event.offsetY);
@@ -422,7 +423,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         // Empty implementation, to be overridden by subclasses
     }
 
-    private onMouseMove(event): void {
+    private onMouseMove(event: DrawMouseEvent): void {
         this.updateCursorStyle(event);
 
         this.mapView.update();
@@ -544,7 +545,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         }, 100);
     }
 
-    private onMouseWheel(event: WheelEvent): void {
+    private onMouseWheel(event: DrawWheelEvent): void {
         // if (this.heightAdjustManager.handleWheelAdjustment(event)) {
         //     return;
         // }
@@ -1285,8 +1286,9 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
      */
     protected getTilesRenderDataSources(): ITileRenderDataSource[] {
         return this.mapView.dataSources.filter(
-            item => (item as any).raycast
-        ) as unknown as ITileRenderDataSource[];
+            (item): item is DataSource & ITileRenderDataSource =>
+                typeof (item as Partial<ITileRenderDataSource>).raycast === "function"
+        );
     }
 
     /**
