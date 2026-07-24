@@ -8,26 +8,70 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 
 import { DrawableObject } from "./DrawableObject";
+import { DrawMaterialFactory } from "./DrawMaterialFactory";
+import { type DrawLineStringGeometry, DrawableType, type VertexPointUserData } from "./DrawTypes";
 import { PointObject } from "./PointObject";
 
+/**
+ * 线绘制对象类
+ *
+ * 职责：
+ * - 管理线对象的几何体和视觉表现
+ * - 处理顶点管理和更新
+ * - 响应选中/编辑状态变化
+ * - 材质创建委托给 DrawMaterialFactory（单一职责）
+ */
 export class DrawLine extends DrawableObject {
+    /**
+     * 轮廓线对象
+     */
     protected outlineLine: Line2 | null = null;
 
-    // Change private properties to protected properties so that subclasses can access them
+    /**
+     * 主线对象
+     */
     protected line: Line2;
-    protected lineContainer: THREE.Object3D;
+
+    /**
+     * 线容器（用于局部坐标变换）
+     */
+    protected readonly lineContainer: THREE.Object3D;
+
+    /**
+     * 基础线宽
+     */
     protected baseLineWidth: number = 2;
+
+    /**
+     * 线颜色
+     */
     protected lineColor: number = 0xffff00;
+
+    /**
+     * 顶点可视化点数组
+     */
     protected vertexPoints: PointObject[] = [];
 
+    /**
+     * 线材质引用（用于动态更新）
+     */
+    protected lineMaterial: LineMaterial;
+
+    /**
+     * 构造函数
+     *
+     * @param mapView - 地图视图实例
+     * @param vertices - 顶点坐标数组
+     * @param id - 可选的对象 ID
+     */
     constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
         super(mapView, id);
-        this.vertices = vertices;
+        this.vertices = [...vertices];
 
         const geometry = new LineGeometry();
-        const material = this.createLineMaterial(this.lineColor, this.baseLineWidth);
+        this.lineMaterial = this.createLineMaterial(this.lineColor, this.baseLineWidth);
 
-        this.line = new Line2(geometry, material);
+        this.line = new Line2(geometry, this.lineMaterial);
         this.line.renderOrder = 1;
 
         this.lineContainer = new THREE.Object3D();
@@ -40,45 +84,50 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Create line material
-     * @param color - Line color
-     * @param linewidth - Line width
-     * @returns LineMaterial instance
+     * 获取绘制对象类型
+     * @returns 线对象类型标识
+     */
+    public getDrawableType(): DrawableType {
+        return DrawableType.LINE;
+    }
+
+    /**
+     * 创建线材质
+     *
+     * @param color - 线颜色
+     * @param linewidth - 线宽
+     * @returns LineMaterial 实例
+     *
+     * 说明：委托给 DrawMaterialFactory 统一创建材质
      */
     protected createLineMaterial(color: number, linewidth: number): LineMaterial {
-        return new LineMaterial({
+        return DrawMaterialFactory.createLineMaterial({
             color,
-            linewidth,
-            dashed: false,
-            opacity: 1.0,
-            depthTest: false,
-            transparent: true,
-            alphaToCoverage: true
+            lineWidth: linewidth
         });
     }
 
     /**
-     * Update vertex position
-     * @param index - Vertex index
-     * @param newVertex - New vertex coordinates
+     * 更新顶点位置
+     * @param index - 顶点索引
+     * @param newVertex - 新的顶点坐标
      */
     public updateVertex(index: number, newVertex: GeoCoordinates): void {
         if (index >= 0 && index < this.vertices.length) {
             this.vertices[index] = newVertex;
 
-            // Synchronously update the corresponding vertex visualization point
             if (index < this.vertexPoints.length) {
                 this.vertexPoints[index].moveTo(newVertex);
-                this.vertexPoints[index].update(); // Ensure immediate update
+                this.vertexPoints[index].update();
             }
 
-            this.update(); // Update the line itself
+            this.update();
         }
     }
 
     /**
-     * Move the entire line to a new position
-     * @param newPosition - New position coordinates
+     * 移动整个线到新位置
+     * @param newPosition - 新的位置坐标
      */
     public moveTo(newPosition: GeoCoordinates): void {
         if (this.vertices.length === 0) return;
@@ -87,7 +136,6 @@ export class DrawLine extends DrawableObject {
         const deltaLat = newPosition.latitude - center.latitude;
         const deltaLon = newPosition.longitude - center.longitude;
 
-        // Move all vertices
         for (let i = 0; i < this.vertices.length; i++) {
             const vertex = this.vertices[i];
             const newVertex = new GeoCoordinates(
@@ -97,7 +145,6 @@ export class DrawLine extends DrawableObject {
             );
             this.vertices[i] = newVertex;
 
-            // Synchronously update vertex visualization points
             if (i < this.vertexPoints.length) {
                 this.vertexPoints[i].moveTo(newVertex);
             }
@@ -107,22 +154,20 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Set line vertices
-     * @param vertices - Vertex coordinate array
+     * 设置线顶点
+     * @param vertices - 顶点坐标数组
      */
     public setVertices(vertices: GeoCoordinates[]): void {
         if (vertices.length < 2) return;
 
-        this.vertices = vertices;
-
-        // Recreate vertex points
+        this.vertices = [...vertices];
         this.createVertexPoints();
         this.update();
     }
 
     /**
-     * Get the center point coordinates of the line
-     * @returns Center point coordinates of the line
+     * 获取线的中心点坐标
+     * @returns 线的中心点坐标
      */
     public getCenter(): GeoCoordinates {
         if (!this.vertices || this.vertices.length === 0) {
@@ -147,7 +192,7 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Update line display
+     * 更新线显示
      */
     public update(): void {
         if (!this.vertices || this.vertices.length < 2) {
@@ -157,14 +202,11 @@ export class DrawLine extends DrawableObject {
             this.line.visible = true;
         }
 
-        // Calculate the center point as the origin of local coordinates
         const center = this.getCenter();
         const centerProjected = this.mapView.projection.projectPoint(center);
 
-        // Set the position of the line container
         this.lineContainer.position.copy(centerProjected);
 
-        // Calculate local coordinates relative to the center point
         const positions = this.vertices.map(vertex => {
             const projected = this.mapView.projection.projectPoint(vertex);
             return new THREE.Vector3(
@@ -178,15 +220,13 @@ export class DrawLine extends DrawableObject {
         const geometry = this.line.geometry as LineGeometry;
         geometry.setPositions(vertices);
 
-        // Ensure the number of vertex visualization points matches
         if (this.vertexPoints.length !== this.vertices.length) {
             this.createVertexPoints();
         } else {
-            // Synchronize the positions of vertex visualization points
             for (let i = 0; i < this.vertices.length; i++) {
                 if (i < this.vertexPoints.length) {
                     this.vertexPoints[i].moveTo(this.vertices[i]);
-                    this.vertexPoints[i].update(); // Ensure immediate update
+                    this.vertexPoints[i].update();
                 }
             }
         }
@@ -195,15 +235,14 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Set vertex selection state
-     * @param index - Vertex index
-     * @param selected - Whether selected
+     * 设置顶点选中状态
+     * @param index - 顶点索引
+     * @param selected - 是否选中
      */
     public setVertexSelected(index: number, selected: boolean): void {
         if (index >= 0 && index < this.vertexPoints.length) {
             this.vertexPoints[index].setSelected(selected);
 
-            // If the vertex is selected, display the height handle
             if (selected) {
                 this.vertexPoints[index].setEditing(true);
             } else {
@@ -213,9 +252,9 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Get vertex selection state
-     * @param index - Vertex index
-     * @returns Whether selected
+     * 获取顶点选中状态
+     * @param index - 顶点索引
+     * @returns 是否选中
      */
     public getVertexSelected(index: number): boolean {
         return index >= 0 && index < this.vertexPoints.length
@@ -224,23 +263,21 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Update line visual effects
+     * 更新线视觉效果
+     * 响应选中/编辑状态变化
      */
     protected updateVisuals(): void {
-        const material = this.line.material as LineMaterial;
         if (this.isSelected) {
-            material.color.set(0x00ff00);
-            material.linewidth = this.baseLineWidth * 2;
+            this.lineMaterial.color.set(DrawMaterialFactory.getSelectedColor());
+            this.lineMaterial.linewidth = this.baseLineWidth * 2;
 
-            // When the object is selected, all vertices are also displayed as selected
             this.vertexPoints.forEach(point => {
                 point.setSelected(true);
             });
         } else {
-            material.color.set(this.lineColor);
-            material.linewidth = this.baseLineWidth;
+            this.lineMaterial.color.set(this.lineColor);
+            this.lineMaterial.linewidth = this.baseLineWidth;
 
-            // When the object is deselected, all vertices are also deselected
             this.vertexPoints.forEach(point => {
                 point.setSelected(false);
                 point.setEditing(false);
@@ -249,10 +286,10 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Convert to GeoJSON format
-     * @returns GeoJSON object
+     * 转换为 GeoJSON 格式
+     * @returns 类型化的 LineString GeoJSON 对象
      */
-    public toGeoJSON(): any {
+    public toGeoJSON(): DrawLineStringGeometry {
         return {
             type: "LineString",
             coordinates: this.vertices.map(vertex => [
@@ -264,50 +301,46 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Dispose line resources
+     * 释放线资源
      */
     public dispose(): void {
         super.dispose();
 
-        // Remove lineContainer from parent object
         if (this.lineContainer.parent) {
             this.lineContainer.parent.remove(this.lineContainer);
         }
 
-        this.line.geometry.dispose();
-        (this.line.material as THREE.Material).dispose();
+        DrawMaterialFactory.disposeGeometry(this.line.geometry);
+        DrawMaterialFactory.disposeMaterial(this.line.material);
 
         this.vertexPoints.forEach(point => {
             point.dispose();
         });
         this.vertexPoints = [];
 
-        // Clean up outlineLine
         if (this.outlineLine) {
-            this.outlineLine.geometry.dispose();
-            (this.outlineLine.material as THREE.Material).dispose();
+            DrawMaterialFactory.disposeGeometry(this.outlineLine.geometry);
+            DrawMaterialFactory.disposeMaterial(this.outlineLine.material);
             this.outlineLine = null;
         }
     }
 
     /**
-     * Get vertex visualization points array
-     * @returns PointObject array
+     * 获取顶点可视化点数组
+     * @returns PointObject 数组
      */
     public getVertexPoints(): PointObject[] {
-        return this.vertexPoints;
+        return [...this.vertexPoints];
     }
 
     /**
-     * Create outline object
+     * 创建轮廓对象
      */
     protected createOutlineObject(): void {
-        // Directly use the main line's geometry to avoid repeated creation and calculation
         const mainGeometry = this.line.geometry;
-
         const material = this.createOutlineMaterial();
 
-        this.outlineLine = new Line2(mainGeometry, material); // Share the same geometry
+        this.outlineLine = new Line2(mainGeometry, material);
         this.outlineLine.renderOrder = -10;
         this.outlineLine.raycast = () => {};
 
@@ -315,42 +348,35 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Create outline material
-     * @returns LineMaterial instance
+     * 创建轮廓材质
+     * @returns LineMaterial 实例
+     *
+     * 说明：委托给 DrawMaterialFactory 统一创建材质
      */
     protected createOutlineMaterial(): LineMaterial {
-        return new LineMaterial({
-            color: 0xffd700,
-            linewidth: 3,
-            dashed: true,
-            dashSize: 0.8,
-            gapSize: 0.4,
-            depthTest: false,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.8
-        });
+        return DrawMaterialFactory.createOutlineMaterial();
     }
 
     /**
-     * Create vertex visualization points
+     * 创建顶点可视化点
      */
     protected createVertexPoints(): void {
-        // Clean up existing points
         this.vertexPoints.forEach(point => {
             this.remove(point.getObject3D());
             point.dispose();
         });
         this.vertexPoints = [];
 
-        // Create new vertex points
         for (let i = 0; i < this.vertices.length; i++) {
-            // Use factory method to create vertex points, allowing subclass override
             const vertexPoint = this.createVertexPoint(this.vertices[i], true);
 
-            // Add index identifier to the vertex
-            vertexPoint.getObject3D().userData.vertexIndex = i;
-            vertexPoint.getObject3D().userData.parentObject = this;
+            const userData: VertexPointUserData = {
+                isVertexPoint: true,
+                isVertex: true,
+                vertexIndex: i,
+                parentObject: this
+            };
+            vertexPoint.getObject3D().userData = userData;
 
             this.vertexPoints.push(vertexPoint);
             this.add(vertexPoint.getObject3D());
@@ -358,10 +384,13 @@ export class DrawLine extends DrawableObject {
     }
 
     /**
-     * Create vertex visualization point object
-     * @param position - Vertex position
-     * @param isVertex - Whether it is a vertex
-     * @returns PointObject instance
+     * 创建顶点可视化点对象
+     *
+     * @param position - 顶点位置
+     * @param isVertex - 是否为顶点
+     * @returns PointObject 实例
+     *
+     * 工厂方法，允许子类重写
      */
     protected createVertexPoint(position: GeoCoordinates, isVertex: boolean): PointObject {
         return new PointObject(this.mapView, position, isVertex);

@@ -31,6 +31,19 @@ interface ITileRenderDataSource {
     raycast(raycaster: THREE.Raycaster, intersections: THREE.Intersection[]): void;
 }
 
+/**
+ * 类型守卫：检查对象是否为可射线检测的数据源
+ * @param item - 待检查的数据源对象
+ * @returns 是否为 ITileRenderDataSource
+ */
+function isTileRenderDataSource(item: unknown): item is ITileRenderDataSource {
+    return (
+        item !== null &&
+        typeof item === "object" &&
+        typeof (item as ITileRenderDataSource).raycast === "function"
+    );
+}
+
 export { DrawEventNames };
 
 export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
@@ -395,7 +408,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         });
     }
 
-    private onMouseDown(event): void {
+    private onMouseDown(event: MouseEvent): void {
         if (this.drawMode === DrawMode.NONE) return;
 
         this.dragStartPoint.set(event.offsetX, event.offsetY);
@@ -422,7 +435,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         // Empty implementation, to be overridden by subclasses
     }
 
-    private onMouseMove(event): void {
+    private onMouseMove(event: MouseEvent): void {
         this.updateCursorStyle(event);
 
         this.mapView.update();
@@ -1285,7 +1298,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
      */
     protected getTilesRenderDataSources(): ITileRenderDataSource[] {
         return this.mapView.dataSources.filter(
-            item => (item as any).raycast
+            isTileRenderDataSource
         ) as unknown as ITileRenderDataSource[];
     }
 

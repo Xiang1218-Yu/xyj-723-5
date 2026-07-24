@@ -3,7 +3,7 @@
 import * as THREE from "three";
 
 import { type RawShaderMaterialParameters, RawShaderMaterial } from "./RawShaderMaterial";
-import linesShaderChunk from "./ShaderChunks/LinesChunks";
+import { ensureShaderChunks } from "./ShaderChunkManager";
 
 const vertexSource: string = `
 #ifdef USE_COLOR
@@ -57,36 +57,43 @@ void main() {
 }`;
 
 /**
- * Parameters used when constructing a new {@link HighPrecisionLineMaterial}.
+ * HighPrecisionLineMaterial 构造参数
  */
 export interface HighPrecisionLineMaterialParameters extends RawShaderMaterialParameters {
     /**
-     * Line color.
+     * 线颜色
      */
-    color?: number | string | THREE.Color;
+    color?: THREE.ColorRepresentation;
     /**
-     * Line opacity.
+     * 线不透明度
      */
     opacity?: number;
 }
 
 /**
- * Material designed to render high precision lines (ideal for position-sensible data).
+ * 用于渲染高精度线的材质（适用于位置敏感数据）
+ *
+ * 职责：
+ * - 提供双精度顶点位置支持
+ * - 管理颜色和透明度 uniform
+ * - 类型安全的参数处理
  */
 export class HighPrecisionLineMaterial extends RawShaderMaterial {
-    static DEFAULT_COLOR: number = 0x000050;
-    static DEFAULT_OPACITY: number = 1.0;
+    static readonly DEFAULT_COLOR: number = 0x000050;
+    static readonly DEFAULT_OPACITY: number = 1.0;
 
+    /**
+     * 类型标记，用于 isHighPrecisionLineMaterial 类型守卫
+     */
     isHighPrecisionLineMaterial: boolean;
 
     /**
-     * Constructs a new `HighPrecisionLineMaterial`.
+     * 构造函数
      *
-     * @param params - `HighPrecisionLineMaterial` parameters.  Always required except when cloning
-     * another material.
+     * @param params - HighPrecisionLineMaterial 参数，克隆其他材质时可选
      */
     constructor(params?: HighPrecisionLineMaterialParameters) {
-        Object.assign(THREE.ShaderChunk, linesShaderChunk);
+        ensureShaderChunks("highPrecisionLines");
 
         const shaderParams: RawShaderMaterialParameters | undefined = params
             ? {
@@ -94,8 +101,6 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
                   vertexShader: vertexSource,
                   fragmentShader: fragmentSource,
                   uniforms: {
-                      // FLYWAVE-17373: Original uniform name 'diffuse' due to shader compilation
-                      // errors with Metal in Safari 15 on MacOS Monterrey and iPadOS 15.
                       diffuseColor: new THREE.Uniform(
                           new THREE.Color(HighPrecisionLineMaterial.DEFAULT_COLOR)
                       ),
@@ -104,19 +109,18 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
                       u_eyepos: new THREE.Uniform(new THREE.Vector3()),
                       u_eyepos_lowpart: new THREE.Uniform(new THREE.Vector3())
                   },
-                  rendererCapabilities: params.rendererCapabilities
+                  rendererCapabilities: params.rendererCapabilities,
+                  ...params
               }
             : undefined;
-        Object.assign(shaderParams as any, params as any);
+
         super(shaderParams);
 
-        // this.name = "HighPrecisionLineMaterial";
         this.isHighPrecisionLineMaterial = true;
 
-        // Apply initial parameter values.
         if (params) {
             if (params.color !== undefined) {
-                this.color.set(params.color as any);
+                this.color.set(params.color);
             }
             if (params.opacity !== undefined) {
                 this.opacity = params.opacity;
@@ -127,7 +131,7 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
     }
 
     /**
-     * Line color.
+     * 线颜色
      */
     get color(): THREE.Color {
         return this.uniforms.diffuseColor.value as THREE.Color;
@@ -137,11 +141,20 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
         this.uniforms.diffuseColor.value.copy(value);
     }
 
-    private updateTransparencyFeature() {
-        this.transparent = this.opacity < 1.0 ? true : false;
+    /**
+     * 更新透明特性
+     */
+    private updateTransparencyFeature(): void {
+        this.transparent = this.opacity < 1.0;
     }
 }
 
+/**
+ * 类型守卫：检查材质是否为 HighPrecisionLineMaterial
+ *
+ * @param material - 待检查的材质对象
+ * @returns 是否为 HighPrecisionLineMaterial
+ */
 export function isHighPrecisionLineMaterial(
     material: object | undefined
 ): material is HighPrecisionLineMaterial {

@@ -3,33 +3,68 @@
 import {
     type Feature,
     type FeatureCollection,
-    type GeoJson
+    type FeatureGeometry,
+    type GeoJson,
+    type GeometryCollection,
+    type LineString as GeoJsonLineString,
+    type Point as GeoJsonPoint,
+    type Polygon as GeoJsonPolygon
 } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapControls } from "@flywave/flywave-map-controls";
 import { type MapView } from "@flywave/flywave-mapview";
-import * as THREE from "three";
 
-import { type DrawableObject } from "./DrawableObject";
+import { DrawableObject } from "./DrawableObject";
 import { DrawLine } from "./DrawLine";
-import { DrawMode } from "./DrawMode";
 import { DrawPolygon } from "./DrawPolygon";
+import {
+    isLineStringGeometry,
+    isPointGeometry,
+    isPolygonGeometry,
+    type CoordinateArray,
+    type CoordinateTuple,
+    type DrawLineStringGeometry,
+    type DrawPointGeometry,
+    type DrawPolygonGeometry
+} from "./DrawTypes";
 import { MapDrawControls } from "./MapDrawControls";
 import { PointObject } from "./PointObject";
 
 /**
- * GeoJSON drawing controls class
- * Control specifically designed for drawing and editing GeoJSON data
+ * 类型守卫：检查是否为 GeometryCollection
+ * @param geometry - 几何体
+ * @returns 是否为 GeometryCollection
+ */
+function isGeometryCollection(geometry: FeatureGeometry | GeometryCollection): geometry is GeometryCollection {
+    return geometry.type === "GeometryCollection";
+}
+
+/**
+ * GeoJSON 绘制控件类
+ *
+ * 职责：
+ * - 从 GeoJSON 数据创建绘制对象
+ * - 支持 Feature、FeatureCollection 和纯几何体
+ * - 基于几何体类型的对象创建工厂方法
+ * - 使用精确类型，杜绝 any 类型
+ * - 支持对象更新和属性同步
  */
 export class GeoJSONDrawControls extends MapDrawControls {
+    /**
+     * 构造函数
+     *
+     * @param mapView - 地图视图实例
+     * @param mapControls - 地图控件实例
+     */
     constructor(mapView: MapView, mapControls: MapControls) {
         super(mapView, mapControls);
     }
 
     /**
-     * Create drawing objects from GeoJSON data
-     * @param geoJson GeoJSON data
-     * @returns Array of created drawing objects
+     * 从 GeoJSON 数据创建绘制对象数组
+     *
+     * @param geoJson - GeoJSON 数据
+     * @returns 创建的绘制对象数组
      */
     public createObjectsFromGeoJSON(geoJson: GeoJson): DrawableObject[] {
         const objects: DrawableObject[] = [];
@@ -39,9 +74,7 @@ export class GeoJSONDrawControls extends MapDrawControls {
             return objects;
         }
 
-        // Handle different types of GeoJSON data
         if (this.isFeatureCollection(geoJson)) {
-            // FeatureCollection
             geoJson.features.forEach((feature: Feature) => {
                 const object = this.createObjectFromFeature(feature);
                 if (object) {
@@ -49,14 +82,12 @@ export class GeoJSONDrawControls extends MapDrawControls {
                 }
             });
         } else if (this.isFeature(geoJson)) {
-            // Single Feature
             const object = this.createObjectFromFeature(geoJson);
             if (object) {
                 objects.push(object);
             }
         } else {
-            // Geometry object
-            const object = this.createObjectFromGeometry(geoJson);
+            const object = this.createObjectFromGeometry(geoJson as FeatureGeometry);
             if (object) {
                 objects.push(object);
             }
@@ -66,39 +97,41 @@ export class GeoJSONDrawControls extends MapDrawControls {
     }
 
     /**
-     * Check if object is a FeatureCollection
-     * @param geoJson GeoJSON object
-     * @returns Whether it is a FeatureCollection
+     * 类型守卫：检查是否为 FeatureCollection
+     *
+     * @param geoJson - GeoJSON 对象
+     * @returns 是否为 FeatureCollection
      */
     private isFeatureCollection(geoJson: GeoJson): geoJson is FeatureCollection {
         return (geoJson as FeatureCollection).type === "FeatureCollection";
     }
 
     /**
-     * Check if object is a Feature
-     * @param geoJson GeoJSON object
-     * @returns Whether it is a Feature
+     * 类型守卫：检查是否为 Feature
+     *
+     * @param geoJson - GeoJSON 对象
+     * @returns 是否为 Feature
      */
     private isFeature(geoJson: GeoJson): geoJson is Feature {
         return (geoJson as Feature).type === "Feature";
     }
 
     /**
-     * Create drawing object from Feature
-     * @param feature Feature object
-     * @returns DrawableObject instance
+     * 从 Feature 创建绘制对象
+     *
+     * @param feature - Feature 对象
+     * @returns DrawableObject 实例或 null
      */
     private createObjectFromFeature(feature: Feature): DrawableObject | null {
         try {
             let object: DrawableObject | null = null;
 
-            // Create object based on geometry type
-            object = this.createObjectFromGeometry(feature.geometry);
+            if (!isGeometryCollection(feature.geometry)) {
+                object = this.createObjectFromGeometry(feature.geometry);
+            }
 
             if (object) {
-                // Set object properties
                 if (feature.id !== undefined) {
-                    // Use userData to store custom ID
                     object.userData.featureId = feature.id;
                 }
 
@@ -115,30 +148,25 @@ export class GeoJSONDrawControls extends MapDrawControls {
     }
 
     /**
-     * Create drawing object from geometry object
-     * @param geometry Geometry object
-     * @returns DrawableObject instance
+     * 从几何体创建绘制对象（工厂方法）
+     *
+     * @param geometry - GeoJSON 几何体
+     * @returns DrawableObject 实例或 null
+     *
+     * 说明：使用类型守卫替代 any 类型检查
      */
-    private createObjectFromGeometry(geometry: any): DrawableObject | null {
+    private createObjectFromGeometry(geometry: FeatureGeometry): DrawableObject | null {
         try {
-            let object: DrawableObject | null = null;
-
-            switch (geometry.type) {
-                case "Point":
-                    object = this.createPointFromGeometry(geometry);
-                    break;
-                case "LineString":
-                    object = this.createLineFromGeometry(geometry);
-                    break;
-                case "Polygon":
-                    object = this.createPolygonFromGeometry(geometry);
-                    break;
-                default:
-                    console.warn(`Unsupported geometry type: ${geometry.type}`);
-                    break;
+            if (isPointGeometry(geometry)) {
+                return this.createPointFromGeometry(geometry);
+            } else if (isLineStringGeometry(geometry)) {
+                return this.createLineFromGeometry(geometry);
+            } else if (isPolygonGeometry(geometry)) {
+                return this.createPolygonFromGeometry(geometry);
             }
 
-            return object;
+            console.warn(`Unsupported geometry type: ${geometry.type}`);
+            return null;
         } catch (error) {
             console.error("Error creating object from geometry:", error);
             return null;
@@ -146,21 +174,22 @@ export class GeoJSONDrawControls extends MapDrawControls {
     }
 
     /**
-     * Create point object from Point geometry
-     * @param geometry Point geometry data
-     * @returns PointObject instance
+     * 从 Point 几何体创建点对象
+     *
+     * @param geometry - Point 几何体
+     * @returns PointObject 实例或 null
      */
-    private createPointFromGeometry(geometry: any): PointObject | null {
+    private createPointFromGeometry(geometry: DrawPointGeometry): PointObject | null {
         if (!geometry || geometry.type !== "Point" || !geometry.coordinates) {
             return null;
         }
 
         try {
-            const coordinates = geometry.coordinates;
+            const coordinates = geometry.coordinates as CoordinateTuple;
             const position = new GeoCoordinates(
-                coordinates[1], // latitude
-                coordinates[0], // longitude
-                coordinates[2] || 0 // altitude
+                coordinates[1],
+                coordinates[0],
+                coordinates[2] || 0
             );
 
             return new PointObject(this.mapView, position);
@@ -171,24 +200,19 @@ export class GeoJSONDrawControls extends MapDrawControls {
     }
 
     /**
-     * Create line object from LineString geometry
-     * @param geometry LineString geometry data
-     * @returns DrawLine instance
+     * 从 LineString 几何体创建线对象
+     *
+     * @param geometry - LineString 几何体
+     * @returns DrawLine 实例或 null
      */
-    private createLineFromGeometry(geometry: any): DrawLine | null {
+    private createLineFromGeometry(geometry: DrawLineStringGeometry): DrawLine | null {
         if (!geometry || geometry.type !== "LineString" || !geometry.coordinates) {
             return null;
         }
 
         try {
-            const vertices = geometry.coordinates.map((coord: number[]) => {
-                return new GeoCoordinates(
-                    coord[1], // latitude
-                    coord[0], // longitude
-                    coord[2] || 0 // altitude
-                );
-            });
-
+            const coordinates = geometry.coordinates as CoordinateArray;
+            const vertices = DrawableObject.createVerticesFromCoordinates(coordinates);
             return new DrawLine(this.mapView, vertices);
         } catch (error) {
             console.error("Error creating DrawLine from geometry:", error);
@@ -197,25 +221,22 @@ export class GeoJSONDrawControls extends MapDrawControls {
     }
 
     /**
-     * Create polygon object from Polygon geometry
-     * @param geometry Polygon geometry data
-     * @returns DrawPolygon instance
+     * 从 Polygon 几何体创建多边形对象
+     *
+     * @param geometry - Polygon 几何体
+     * @returns DrawPolygon 实例或 null
      */
-    private createPolygonFromGeometry(geometry: any): DrawPolygon | null {
+    private createPolygonFromGeometry(geometry: DrawPolygonGeometry): DrawPolygon | null {
         if (!geometry || geometry.type !== "Polygon" || !geometry.coordinates) {
             return null;
         }
 
         try {
-            // Only use the first ring (outer ring), ignore inner rings
-            const vertices = geometry.coordinates[0].map((coord: number[]) => {
-                return new GeoCoordinates(
-                    coord[1], // latitude
-                    coord[0], // longitude
-                    coord[2] || 0 // altitude
-                );
-            });
-
+            if (geometry.coordinates.length === 0) {
+                return null;
+            }
+            const coordinates = geometry.coordinates[0] as CoordinateArray;
+            const vertices = DrawableObject.createVerticesFromCoordinates(coordinates);
             return new DrawPolygon(this.mapView, vertices);
         } catch (error) {
             console.error("Error creating DrawPolygon from geometry:", error);
@@ -224,9 +245,10 @@ export class GeoJSONDrawControls extends MapDrawControls {
     }
 
     /**
-     * Add GeoJSON data to drawing controls
-     * @param geoJson GeoJSON data
-     * @returns Number of successfully added objects
+     * 添加 GeoJSON 数据到绘制控件
+     *
+     * @param geoJson - GeoJSON 数据
+     * @returns 成功添加的对象数量
      */
     public addGeoJSON(geoJson: GeoJson): number {
         const objects = this.createObjectsFromGeoJSON(geoJson);
@@ -235,9 +257,10 @@ export class GeoJSONDrawControls extends MapDrawControls {
     }
 
     /**
-     * Update existing objects with GeoJSON data
-     * @param geoJson GeoJSON data
-     * @returns Number of successfully updated objects
+     * 使用 GeoJSON 数据更新现有对象
+     *
+     * @param geoJson - GeoJSON 数据
+     * @returns 成功更新的对象数量
      */
     public updateGeoJSON(geoJson: GeoJson): number {
         let updateCount = 0;
@@ -246,7 +269,6 @@ export class GeoJSONDrawControls extends MapDrawControls {
             return updateCount;
         }
 
-        // Handle different types of GeoJSON data
         const features: Feature[] = [];
         if (this.isFeatureCollection(geoJson)) {
             features.push(...geoJson.features);
@@ -257,13 +279,11 @@ export class GeoJSONDrawControls extends MapDrawControls {
         features.forEach((feature: Feature) => {
             try {
                 if (feature.id !== undefined) {
-                    // Find existing object with the same ID
                     const existingObject = this.getObjects().find(
                         obj => obj.userData.featureId === feature.id
                     );
 
-                    if (existingObject) {
-                        // Update existing object
+                    if (existingObject && !isGeometryCollection(feature.geometry)) {
                         this.updateObjectFromGeometry(existingObject, feature.geometry);
                         updateCount++;
                     }
@@ -277,49 +297,31 @@ export class GeoJSONDrawControls extends MapDrawControls {
     }
 
     /**
-     * Update existing object based on geometry data
-     * @param object Existing object
-     * @param geometry Geometry data
+     * 根据几何体数据更新现有对象
+     *
+     * @param object - 现有对象
+     * @param geometry - 几何体数据
      */
-    private updateObjectFromGeometry(object: DrawableObject, geometry: any): void {
+    private updateObjectFromGeometry(object: DrawableObject, geometry: FeatureGeometry): void {
         try {
-            switch (geometry.type) {
-                case "Point":
-                    if (object instanceof PointObject && geometry.coordinates) {
-                        const coordinates = geometry.coordinates;
-                        const newPosition = new GeoCoordinates(
-                            coordinates[1], // latitude
-                            coordinates[0], // longitude
-                            coordinates[2] || 0 // altitude
-                        );
-                        object.moveTo(newPosition);
-                    }
-                    break;
-                case "LineString":
-                    if (object instanceof DrawLine && geometry.coordinates) {
-                        const vertices = geometry.coordinates.map((coord: number[]) => {
-                            return new GeoCoordinates(
-                                coord[1], // latitude
-                                coord[0], // longitude
-                                coord[2] || 0 // altitude
-                            );
-                        });
-                        object.setVertices(vertices);
-                    }
-                    break;
-                case "Polygon":
-                    if (object instanceof DrawPolygon && geometry.coordinates) {
-                        // Only use the first ring (outer ring), ignore inner rings
-                        const vertices = geometry.coordinates[0].map((coord: number[]) => {
-                            return new GeoCoordinates(
-                                coord[1], // latitude
-                                coord[0], // longitude
-                                coord[2] || 0 // altitude
-                            );
-                        });
-                        object.setVertices(vertices);
-                    }
-                    break;
+            if (isPointGeometry(geometry) && object instanceof PointObject) {
+                const coordinates = geometry.coordinates as CoordinateTuple;
+                const newPosition = new GeoCoordinates(
+                    coordinates[1],
+                    coordinates[0],
+                    coordinates[2] || 0
+                );
+                object.moveTo(newPosition);
+            } else if (isLineStringGeometry(geometry) && object instanceof DrawLine) {
+                const coordinates = geometry.coordinates as CoordinateArray;
+                const vertices = DrawableObject.createVerticesFromCoordinates(coordinates);
+                object.setVertices(vertices);
+            } else if (isPolygonGeometry(geometry) && object instanceof DrawPolygon) {
+                if (geometry.coordinates.length > 0) {
+                    const coordinates = geometry.coordinates[0] as CoordinateArray;
+                    const vertices = DrawableObject.createVerticesFromCoordinates(coordinates);
+                    object.setVertices(vertices);
+                }
             }
         } catch (error) {
             console.error("Error updating object from geometry:", error);
