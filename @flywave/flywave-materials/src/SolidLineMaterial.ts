@@ -8,7 +8,7 @@ import {
     type DisplacementFeatureParameters
 } from "./DisplacementFeature";
 import { setMaterialColor } from "./MaterialTypes";
-import { type FadingFeatureParameters, FadingFeature } from "./MapMeshMaterials";
+import { type FadingFeatureParameters, FadingFeature } from "./FadingFeature";
 import {
     type RawShaderMaterialParameters,
     type RendererMaterialParameters,

@@ -105,3 +105,41 @@ export type ColorRepresentation = THREE.ColorRepresentation;
 export function setMaterialColor(color: THREE.Color, value: ColorRepresentation): void {
     color.set(value);
 }
+
+/**
+ * 将 mixin 与材质的内部 defines 和 uniforms 关联
+ *
+ * 在 THREE.Material 构造后立即调用（在派生类的 super 调用后）
+ *
+ * @param mixin - 将向材质添加功能的 mixin
+ * @param material - 正在应用 mixin feature 的材质
+ */
+export function linkMixinWithMaterial(
+    mixin: MixinShaderProperties,
+    material: HiddenThreeJSMaterialProperties
+): void {
+    if (material.defines === undefined) {
+        material.defines = {};
+    }
+    mixin.shaderDefines = material.defines;
+
+    if (mixin.shaderUniforms === undefined) {
+        mixin.shaderUniforms = {};
+    }
+}
+
+/**
+ * 将 mixin 的 shaderUniforms 与实际材质着色器 uniforms 关联
+ *
+ * 在 onBeforeCompile 回调中调用，将 mixin 特有的 uniforms 注入着色器
+ *
+ * @param mixin - 正在应用的 mixin feature
+ * @param shader - 与材质关联的实际着色器参数
+ */
+export function linkMixinWithShader(
+    mixin: MixinShaderProperties,
+    shader: THREE.WebGLProgramParametersWithUniforms
+): void {
+    Object.assign(shader.uniforms, mixin.shaderUniforms);
+    mixin.shaderUniforms = shader.uniforms;
+}

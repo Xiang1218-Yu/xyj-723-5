@@ -10,15 +10,23 @@
 
 export * from "./CirclePointsMaterial";
 export * from "./CopyMaterial";
+
+// Apply mixins (side effect: modifies material prototypes)
+import "./MapMeshMaterials";
+
 export * from "./DisplacementFeature";
 export * from "./EdgeMaterial";
+export * from "./ExtrusionFeature";
+export * from "./FadingFeature";
 export * from "./GroundAtmosphereMaterial";
 export * from "./HighPrecisionLineMaterial";
 export * from "./HighPrecisionPointMaterial";
 export * from "./IconMaterial";
 export * from "./LuminosityHighPassShader";
+export * from "./MapMeshBasicMaterial";
+export * from "./MapMeshDepthMaterial";
 export * from "./MapMeshMaterialsDefs";
-export * from "./MapMeshMaterials";
+export * from "./MapMeshStandardMaterial";
 export * from "./MaterialTypes";
 export * from "./MSAAMaterial";
 export * from "./RawShaderMaterial";

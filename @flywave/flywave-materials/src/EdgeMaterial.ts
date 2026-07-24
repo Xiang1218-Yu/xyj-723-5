@@ -6,12 +6,8 @@ import {
     type DisplacementFeature,
     type DisplacementFeatureParameters
 } from "./DisplacementFeature";
-import {
-    type ExtrusionFeatureParameters,
-    type FadingFeatureParameters,
-    ExtrusionFeature,
-    FadingFeature
-} from "./MapMeshMaterials";
+import { type ExtrusionFeatureParameters, ExtrusionFeature } from "./ExtrusionFeature";
+import { type FadingFeatureParameters, FadingFeature } from "./FadingFeature";
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
 import { RawShaderMaterial, type RawShaderMaterialParameters, type RendererMaterialParameters } from "./RawShaderMaterial";
 import { enforceBlending, setShaderDefine, setShaderMaterialDefine, type ShaderDefines } from "./Utils";
