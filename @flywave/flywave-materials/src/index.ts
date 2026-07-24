@@ -19,6 +19,7 @@ export * from "./IconMaterial";
 export * from "./LuminosityHighPassShader";
 export * from "./MapMeshMaterialsDefs";
 export * from "./MapMeshMaterials";
+export * from "./MaterialTypes";
 export * from "./MSAAMaterial";
 export * from "./RawShaderMaterial";
 export * from "./SepiaShader";

@@ -7,6 +7,7 @@ import {
     type DisplacementFeature,
     type DisplacementFeatureParameters
 } from "./DisplacementFeature";
+import { setMaterialColor } from "./MaterialTypes";
 import { type FadingFeatureParameters, FadingFeature } from "./MapMeshMaterials";
 import {
     type RawShaderMaterialParameters,
@@ -36,7 +37,7 @@ const DefinesLineCapsMapping: Record<number, LineCaps> = Object.keys(LineCapsDef
         r[defineValue] = defineKey;
         return r;
     },
-    {} as any as Record<number, LineCaps>
+    {} as Record<number, LineCaps>
 );
 
 export enum LineDashesModes {
@@ -58,7 +59,7 @@ const DefinesLineDashesMapping: Record<number, LineDashes> = Object.keys(
     const defineValue: number = LineDashesDefinesMapping[defineKey];
     r[defineValue] = defineKey;
     return r;
-}, {} as any as Record<number, LineDashes>);
+}, {} as Record<number, LineDashes>);
 
 /**
  * The vLength contains the actual line length, it's needed for the creation of line caps by
@@ -333,12 +334,12 @@ export interface SolidLineMaterialParameters
     /**
      * Line color.
      */
-    color?: number | string;
+    color?: THREE.ColorRepresentation;
 
     /**
      * Line outline color.
      */
-    outlineColor?: number | string;
+    outlineColor?: THREE.ColorRepresentation;
 
     /**
      * Enables/Disable depth test.
@@ -398,7 +399,7 @@ export interface SolidLineMaterialParameters
     /**
      * Line dashes color.
      */
-    dashColor?: number | string;
+    dashColor?: THREE.ColorRepresentation;
 
     /**
      * Size of the dashed segments.
@@ -543,11 +544,11 @@ export class SolidLineMaterial
         // Apply initial parameter values.
         if (params) {
             if (params.color !== undefined) {
-                tmpColor.set(params.color as any);
+                setMaterialColor(tmpColor, params.color);
                 this.color = tmpColor;
             }
             if (params.outlineColor !== undefined) {
-                tmpColor.set(params.outlineColor as any);
+                setMaterialColor(tmpColor, params.outlineColor);
                 this.outlineColor = tmpColor;
             }
             if (params.lineWidth !== undefined) {
@@ -588,7 +589,7 @@ export class SolidLineMaterial
                 this.dashes = params.dashes;
             }
             if (params.dashColor !== undefined) {
-                tmpColor.set(params.dashColor as any);
+                setMaterialColor(tmpColor, params.dashColor);
                 this.dashColor = tmpColor;
             }
             if (params.dashSize !== undefined) {

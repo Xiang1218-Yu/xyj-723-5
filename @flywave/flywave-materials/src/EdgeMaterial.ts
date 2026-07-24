@@ -18,7 +18,13 @@ import {
     type RendererMaterialParameters,
     RawShaderMaterial
 } from "./RawShaderMaterial";
-import { enforceBlending, setShaderDefine, setShaderMaterialDefine } from "./Utils";
+import {
+    enforceBlending,
+    setShaderDefine,
+    setShaderMaterialDefine,
+    type ShaderDefines
+} from "./Utils";
+import { setMaterialColor } from "./MaterialTypes";
 
 const vertexSource: string = `
 #define EDGE_DEPTH_OFFSET 0.0001
@@ -131,7 +137,7 @@ export interface EdgeMaterialParameters
     /**
      * Edge color.
      */
-    color?: number | string;
+    color?: THREE.ColorRepresentation;
     /**
      * Color mix value. Mixes between vertexColors and edgeColor.
      */
@@ -164,7 +170,7 @@ export class EdgeMaterial
     constructor(params?: EdgeMaterialParameters) {
         let shaderParams: RawShaderMaterialParameters | undefined;
         if (params) {
-            const defines: Record<string, any> = {};
+            const defines: ShaderDefines = {};
             const hasExtrusion =
                 params.extrusionRatio !== undefined &&
                 params.extrusionRatio >= ExtrusionFeatureDefs.DEFAULT_RATIO_MIN &&
@@ -208,10 +214,7 @@ export class EdgeMaterial
         // Apply initial parameter values.
         if (params !== undefined) {
             if (params.color !== undefined) {
-                // Color may be set directly on object (omitting class setter), because we already
-                // know that is does no require any special handling nor material update
-                // (see: set color()).
-                this.color.set(params.color as any);
+                setMaterialColor(this.color, params.color);
             }
             if (params.colorMix !== undefined) {
                 this.colorMix = params.colorMix;

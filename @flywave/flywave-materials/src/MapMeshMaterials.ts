@@ -4,6 +4,13 @@ import { applyMixinsWithoutProperties, assert, chainCallbacks } from "@flywave/f
 import * as THREE from "three";
 
 import { type DisplacementFeatureParameters, DisplacementFeature } from "./DisplacementFeature";
+import {
+    type HiddenThreeJSMaterialProperties,
+    type MixinShaderProperties,
+    type ShaderCompileCallback,
+    type ShaderDefines,
+    type ShaderUniforms
+} from "./MaterialTypes";
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
 import extrusionShaderChunk from "./ShaderChunks/ExtrusionChunks";
 import fadingShaderChunk from "./ShaderChunks/FadingChunks";
@@ -73,72 +80,7 @@ export interface ExtrusionFeatureParameters {
  *
  * @hidden
  */
-export type UniformsType = Record<string, THREE.IUniform>;
-
-/**
- * Type of callback used internally by THREE.js for shader creation.
- *
- * @hidden
- */
-type CompileCallback = (shader: THREE.WebGLProgramParametersWithUniforms, renderer: any) => void;
-
-/**
- * Material properties used from THREE, which may not be defined in the type.
- */
-export interface HiddenThreeJSMaterialProperties {
-    /**
-     * Informs THREE.js to re-compile material shader (due to change in code or defines).
-     */
-    needsUpdate?: boolean;
-
-    /**
-     * Hidden ThreeJS value that is made public here. Required to add new uniforms to subclasses of
-     * [[THREE.MeshBasicMaterial]]/[[THREE.MeshStandardMaterial]], basically all materials that are
-     * not THREE.ShaderMaterial.
-     * @deprecated Changes to this property are ignored.
-     */
-    uniformsNeedUpdate?: boolean;
-
-    /**
-     * Available in all materials in ThreeJS.
-     */
-    transparent?: boolean;
-
-    /**
-     * Used internally for material shader defines.
-     */
-    defines?: any;
-
-    /**
-     * Defines callback available in THREE.js materials.
-     *
-     * Called before shader program compilation to generate vertex & fragment shader output code.
-     */
-    onBeforeCompile?: CompileCallback;
-}
-
-/**
- * Used internally.
- *
- * @hidden
- */
-export interface MixinShaderProperties {
-    /**
-     * Used internally for material shader defines.
-     */
-    shaderDefines?: any;
-
-    /**
-     * Used internally for shader uniforms, holds references to material internal shader.uniforms.
-     *
-     * Holds a reference to material's internal shader uniforms map. New custom feature based
-     * uniforms are injected using this reference, but also internal THREE.js shader uniforms
-     * will be available via this map after [[Material#onBeforeCompile]] callback is run with
-     * feature enabled.
-     * @see needsUpdate
-     */
-    shaderUniforms?: UniformsType;
-}
+export type UniformsType = ShaderUniforms;
 
 /**
  * Translates a linear distance value [0..1], where 1 is the distance to the far plane, into
@@ -244,8 +186,8 @@ export interface ExtrusionFeature extends HiddenThreeJSMaterialProperties, Mixin
  * @param material The material to check.
  * @returns Whether the given material supports extrusion.
  */
-export function hasExtrusionFeature(material: any): material is ExtrusionFeature {
-    return "extrusionRatio" in material;
+export function hasExtrusionFeature(material: unknown): material is ExtrusionFeature {
+    return material !== null && typeof material === "object" && "extrusionRatio" in material;
 }
 
 // See https://github.com/typescript-eslint/typescript-eslint/blob/master/packages/eslint-plugin/docs/rules/no-redeclare.md#ignoredeclarationmerge
@@ -340,10 +282,11 @@ namespace DisplacementFeature {
 export class DisplacementFeatureMixin implements DisplacementFeature, MixinShaderProperties {
     needsUpdate?: boolean;
     uniformsNeedUpdate?: boolean;
-    defines?: any;
-    shaderDefines?: any;
+    defines?: ShaderDefines;
+    shaderDefines?: ShaderDefines;
     shaderUniforms?: UniformsType;
-    onBeforeCompile?: CompileCallback;
+    onBeforeCompile?: ShaderCompileCallback;
+    displacementMapUvMatrix?: THREE.Matrix3;
     private m_displacementMap: THREE.Texture | null = null;
 
     get displacementMap(): THREE.Texture | null {
@@ -625,10 +568,10 @@ export namespace FadingFeature {
 export class FadingFeatureMixin implements FadingFeature {
     needsUpdate?: boolean;
     uniformsNeedUpdate?: boolean;
-    defines?: any;
-    shaderDefines?: any;
+    defines?: ShaderDefines;
+    shaderDefines?: ShaderDefines;
     shaderUniforms?: UniformsType;
-    onBeforeCompile?: CompileCallback;
+    onBeforeCompile?: ShaderCompileCallback;
     private m_fadeNear: number = FadingFeature.DEFAULT_FADE_NEAR;
     private m_fadeFar: number = FadingFeature.DEFAULT_FADE_FAR;
 
@@ -827,10 +770,10 @@ export namespace ExtrusionFeature {
 export class ExtrusionFeatureMixin implements ExtrusionFeature {
     needsUpdate?: boolean;
     uniformsNeedUpdate?: boolean;
-    defines?: any;
-    shaderDefines?: any;
+    defines?: ShaderDefines;
+    shaderDefines?: ShaderDefines;
     shaderUniforms?: UniformsType;
-    onBeforeCompile?: CompileCallback;
+    onBeforeCompile?: ShaderCompileCallback;
     private m_extrusion: number = ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
 
     protected getExtrusionRatio(): number {
@@ -931,10 +874,10 @@ export class MapMeshBasicMaterial
     }
 
     clone(): this {
-        return new MapMeshBasicMaterial().copy(this);
+        return new MapMeshBasicMaterial().copy(this) as this;
     }
 
-    copy(source: this): any {
+    copy(source: this): this {
         super.copy(source);
         this.copyFadingParameters(source);
         this.copyExtrusionParameters(source);
@@ -1044,10 +987,10 @@ export class MapMeshStandardMaterial
     }
 
     clone(): this {
-        return new MapMeshStandardMaterial().copy(this);
+        return new MapMeshStandardMaterial().copy(this) as this;
     }
 
-    copy(source: this): any {
+    copy(source: this): this {
         super.copy(source);
         this.copyFadingParameters(source);
         this.copyExtrusionParameters(source);
