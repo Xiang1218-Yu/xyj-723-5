@@ -1,11 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // src/PointObject.ts
+import { type Point } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
 import { DrawableObject } from "./DrawableObject";
+import { type DrawableMaterialStrategy } from "./DrawableMaterialStrategy";
 
 // Texture cache
 const textureCache = new Map<string, THREE.Texture>();
@@ -21,9 +23,10 @@ export class PointObject extends DrawableObject {
         mapView: MapView,
         position: GeoCoordinates,
         isVertex: boolean = false,
-        id?: string
+        id?: string,
+        materialStrategy?: DrawableMaterialStrategy
     ) {
-        super(mapView, id);
+        super(mapView, id, materialStrategy);
         this.vertices = [position];
         this.isVertex = isVertex;
         this.baseColor = isVertex ? 0xff6b6b : 0x4ecdc4;
@@ -69,15 +72,9 @@ export class PointObject extends DrawableObject {
         isEditing: boolean = false
     ): THREE.SpriteMaterial {
         const texture = this.createPointTexture(color, isSelected, isVertex, isEditing);
-        return new THREE.SpriteMaterial({
-            map: texture,
-            color: 0xffffff,
-            transparent: true,
-            opacity: 1.0,
-            sizeAttenuation: false,
-            depthTest: false,
-            depthWrite: false
-        });
+        // Delegate the sprite material appearance to the injected material strategy; the point
+        // texture itself is still produced by createPointTexture (subclass-overridable).
+        return this.materialStrategy.createPointSpriteMaterial(texture);
     }
 
     // Change texture creation method to overloadable method
@@ -247,7 +244,7 @@ export class PointObject extends DrawableObject {
     }
 
     // Implement base class abstract method
-    public toGeoJSON(): any {
+    public toGeoJSON(): Point {
         return {
             type: "Point",
             coordinates: [
@@ -297,7 +294,7 @@ export class PointObject extends DrawableObject {
     }
 
     // Static method: Create point object from GeoJSON
-    public static fromGeoJSON(mapView: MapView, geoJson: any, id?: string): PointObject | null {
+    public static fromGeoJSON(mapView: MapView, geoJson: Point, id?: string): PointObject | null {
         if (!geoJson || geoJson.type !== "Point" || !geoJson.coordinates) {
             return null;
         }

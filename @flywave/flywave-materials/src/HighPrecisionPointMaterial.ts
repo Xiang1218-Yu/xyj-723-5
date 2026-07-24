@@ -3,6 +3,7 @@
 import * as THREE from "three";
 
 import linesShaderChunk from "./ShaderChunks/LinesChunks";
+import { ShaderChunkRegistry } from "./ShaderChunks/ShaderChunkRegistry";
 
 const vertexSource: string = `
 #ifdef USE_COLOR
@@ -75,7 +76,8 @@ export class HighPrecisionPointMaterial extends THREE.PointsMaterial {
      * @param params - `HighPrecisionPointMaterial` parameters.
      */
     constructor(params?: HighPrecisionPointMaterialParameters) {
-        Object.assign(THREE.ShaderChunk, linesShaderChunk);
+        // Register the shared line shader chunks through the unified registry (idempotent).
+        ShaderChunkRegistry.register("lines", linesShaderChunk);
 
         const shaderParams = params;
         super(shaderParams);
@@ -106,7 +108,8 @@ export class HighPrecisionPointMaterial extends THREE.PointsMaterial {
         // Apply initial parameter values.
         if (params !== undefined) {
             if (params.color !== undefined) {
-                this.color.set(params.color as any);
+                // `number | string | THREE.Color` is a valid THREE.ColorRepresentation.
+                this.color.set(params.color);
             }
             if (params.opacity !== undefined) {
                 this.opacity = params.opacity;

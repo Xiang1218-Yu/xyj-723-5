@@ -395,7 +395,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         });
     }
 
-    private onMouseDown(event): void {
+    private onMouseDown(event: MouseEvent): void {
         if (this.drawMode === DrawMode.NONE) return;
 
         this.dragStartPoint.set(event.offsetX, event.offsetY);
@@ -422,7 +422,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         // Empty implementation, to be overridden by subclasses
     }
 
-    private onMouseMove(event): void {
+    private onMouseMove(event: MouseEvent): void {
         this.updateCursorStyle(event);
 
         this.mapView.update();
@@ -1284,9 +1284,14 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
      * @returns Array of tile render data sources
      */
     protected getTilesRenderDataSources(): ITileRenderDataSource[] {
-        return this.mapView.dataSources.filter(
-            item => (item as any).raycast
-        ) as unknown as ITileRenderDataSource[];
+        // Only data sources that expose a `raycast` method can be used for tile picking.
+        // The type guard narrows each entry to `ITileRenderDataSource`, avoiding an `any` cast.
+        const isTileRenderDataSource = (
+            item: (typeof this.mapView.dataSources)[number]
+        ): item is (typeof this.mapView.dataSources)[number] & ITileRenderDataSource =>
+            typeof (item as Partial<ITileRenderDataSource>).raycast === "function";
+
+        return this.mapView.dataSources.filter(isTileRenderDataSource);
     }
 
     /**

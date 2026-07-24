@@ -3,7 +3,12 @@
 import {
     type Feature,
     type FeatureCollection,
-    type GeoJson
+    type FeatureGeometry,
+    type GeometryCollection,
+    type GeoJson,
+    type LineString,
+    type Point,
+    type Polygon
 } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapControls } from "@flywave/flywave-map-controls";
@@ -119,7 +124,9 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Geometry object
      * @returns DrawableObject instance
      */
-    private createObjectFromGeometry(geometry: any): DrawableObject | null {
+    private createObjectFromGeometry(
+        geometry: FeatureGeometry | GeometryCollection
+    ): DrawableObject | null {
         try {
             let object: DrawableObject | null = null;
 
@@ -150,7 +157,7 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Point geometry data
      * @returns PointObject instance
      */
-    private createPointFromGeometry(geometry: any): PointObject | null {
+    private createPointFromGeometry(geometry: Point): PointObject | null {
         if (!geometry || geometry.type !== "Point" || !geometry.coordinates) {
             return null;
         }
@@ -175,7 +182,7 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry LineString geometry data
      * @returns DrawLine instance
      */
-    private createLineFromGeometry(geometry: any): DrawLine | null {
+    private createLineFromGeometry(geometry: LineString): DrawLine | null {
         if (!geometry || geometry.type !== "LineString" || !geometry.coordinates) {
             return null;
         }
@@ -201,7 +208,7 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param geometry Polygon geometry data
      * @returns DrawPolygon instance
      */
-    private createPolygonFromGeometry(geometry: any): DrawPolygon | null {
+    private createPolygonFromGeometry(geometry: Polygon): DrawPolygon | null {
         if (!geometry || geometry.type !== "Polygon" || !geometry.coordinates) {
             return null;
         }
@@ -281,7 +288,10 @@ export class GeoJSONDrawControls extends MapDrawControls {
      * @param object Existing object
      * @param geometry Geometry data
      */
-    private updateObjectFromGeometry(object: DrawableObject, geometry: any): void {
+    private updateObjectFromGeometry(
+        object: DrawableObject,
+        geometry: FeatureGeometry | GeometryCollection
+    ): void {
         try {
             switch (geometry.type) {
                 case "Point":

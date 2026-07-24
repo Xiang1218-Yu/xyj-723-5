@@ -4,6 +4,7 @@ import * as THREE from "three";
 
 import { type RawShaderMaterialParameters, RawShaderMaterial } from "./RawShaderMaterial";
 import linesShaderChunk from "./ShaderChunks/LinesChunks";
+import { ShaderChunkRegistry } from "./ShaderChunks/ShaderChunkRegistry";
 
 const vertexSource: string = `
 #ifdef USE_COLOR
@@ -86,7 +87,8 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
      * another material.
      */
     constructor(params?: HighPrecisionLineMaterialParameters) {
-        Object.assign(THREE.ShaderChunk, linesShaderChunk);
+        // Register the shared line shader chunks through the unified registry (idempotent).
+        ShaderChunkRegistry.register("lines", linesShaderChunk);
 
         const shaderParams: RawShaderMaterialParameters | undefined = params
             ? {
@@ -107,7 +109,12 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
                   rendererCapabilities: params.rendererCapabilities
               }
             : undefined;
-        Object.assign(shaderParams as any, params as any);
+        // Merge any additional caller-provided parameters (e.g. depthTest, transparent) onto the
+        // base shader parameters. Both operands are typed as `RawShaderMaterialParameters`, so no
+        // `any` cast is required.
+        if (shaderParams !== undefined && params !== undefined) {
+            Object.assign(shaderParams, params);
+        }
         super(shaderParams);
 
         // this.name = "HighPrecisionLineMaterial";
@@ -116,7 +123,8 @@ export class HighPrecisionLineMaterial extends RawShaderMaterial {
         // Apply initial parameter values.
         if (params) {
             if (params.color !== undefined) {
-                this.color.set(params.color as any);
+                // `number | string | THREE.Color` is a valid THREE.ColorRepresentation.
+                this.color.set(params.color);
             }
             if (params.opacity !== undefined) {
                 this.opacity = params.opacity;
