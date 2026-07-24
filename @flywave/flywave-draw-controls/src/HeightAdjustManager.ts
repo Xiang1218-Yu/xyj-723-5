@@ -1,26 +1,98 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// src/HeightAdjustManager.ts
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
+import { DrawLine } from "./DrawLine";
+import { DrawPolygon } from "./DrawPolygon";
 import { HeightHandle } from "./HeightHandle";
 import { type PointObject } from "./PointObject";
 
+/**
+ * 具有顶点的对象接口
+ * 定义可以附加高度控制柄的绘制对象的公共接口
+ */
+interface VertexContainer {
+    /** 获取所有顶点点 */
+    getVertexPoints(): PointObject[];
+}
+
+/**
+ * 类型守卫：检查对象是否为顶点容器（具有 getVertexPoints 方法）
+ * @param obj - 待检查对象
+ * @returns 是否为 VertexContainer
+ */
+function isVertexContainer(obj: unknown): obj is VertexContainer {
+    return (
+        obj !== null &&
+        typeof obj === "object" &&
+        typeof (obj as VertexContainer).getVertexPoints === "function"
+    );
+}
+
+/**
+ * 高度调整管理器类
+ *
+ * 职责：
+ * - 管理高度控制柄（HeightHandle）的附加和分离
+ * - 处理高度拖拽调整的交互逻辑
+ * - 支持点对象和线/多边形顶点的高度调整
+ * - 统一高度变化事件回调
+ * - 类型安全的对象引用管理
+ */
 export class HeightAdjustManager extends THREE.Object3D {
+    /**
+     * 地图视图引用
+     */
     private readonly mapView: MapView;
+
+    /**
+     * 高度控制柄
+     */
     private readonly heightHandle: HeightHandle;
+
+    /**
+     * 当前附加的点对象
+     */
     private currentPoint: PointObject | null = null;
+
+    /**
+     * 是否正在调整高度
+     */
     private isAdjusting: boolean = false;
+
+    /**
+     * 拖拽起始点（屏幕坐标）
+     */
     private readonly startPoint: THREE.Vector2 = new THREE.Vector2();
+
+    /**
+     * 起始高度
+     */
     private startHeight: number = 0;
+
+    /**
+     * 调整平面（用于射线求交）
+     */
     private readonly adjustmentPlane: THREE.Plane = new THREE.Plane();
+
+    /**
+     * 起始交点
+     */
     private readonly startIntersection: THREE.Vector3 = new THREE.Vector3();
 
-    // Add event callback
+    /**
+     * 高度变化回调
+     */
     private readonly onHeightChanged?: (point: PointObject, newHeight: number) => void;
 
+    /**
+     * 构造函数
+     *
+     * @param mapView - 地图视图实例
+     * @param onHeightChanged - 高度变化时的回调函数
+     */
     constructor(
         mapView: MapView,
         onHeightChanged?: (point: PointObject, newHeight: number) => void
@@ -30,55 +102,57 @@ export class HeightAdjustManager extends THREE.Object3D {
         this.onHeightChanged = onHeightChanged;
         this.heightHandle = new HeightHandle();
 
-        // Add height handle to manager
         this.add(this.heightHandle);
-
-        // Set render order
         this.renderOrder = 1000;
     }
 
-    // Modify attachToPoint method
+    /**
+     * 将高度控制柄附加到点对象
+     *
+     * @param point - 目标点对象
+     */
     public attachToPoint(point: PointObject): void {
         this.currentPoint = point;
 
-        // Update handle position - use point's world coordinates
         const worldPos = this.mapView.projection.projectPoint(point.getCenter());
 
-        // Set handle direction based on projection type
         if (this.mapView.projection.type === ProjectionType.Spherical) {
-            // In spherical projection, use surface normal as handle direction
             const normal = this.mapView.projection.surfaceNormal(worldPos, new THREE.Vector3());
             this.heightHandle.setDirection(normal);
         } else {
-            // In planar projection, keep handle along positive Y-axis
             this.heightHandle.setDirection(new THREE.Vector3(0, 0, 1));
         }
 
-        // Update handle size
         this.heightHandle.updateSize(this.mapView.camera, this.mapView.renderer);
-
-        // Show handle
         this.heightHandle.setVisible(true);
         this.heightHandle.setHoverState(false);
         this.heightHandle.setActiveState(false);
 
-        // Force update once
         this.update();
     }
 
-    // Add method to get current vertex height
+    /**
+     * 获取当前顶点高度
+     * @returns 当前高度或 null
+     */
     public getCurrentVertexHeight(): number | null {
         return this.currentPoint ? this.currentPoint.getHeight() : null;
     }
 
-    // Add method to set current vertex height
+    /**
+     * 设置当前顶点高度
+     * @param height - 新高度值
+     */
     public setCurrentVertexHeight(height: number): void {
         if (this.currentPoint) {
             this.currentPoint.setHeight(height);
         }
     }
 
-    // Detach current point
+    /**
+     * 分离当前点对象
+     * 隐藏高度控制柄并重置状态
+     */
     public detach(): void {
         this.currentPoint = null;
         this.heightHandle.setVisible(false);
@@ -87,7 +161,12 @@ export class HeightAdjustManager extends THREE.Object3D {
         this.isAdjusting = false;
     }
 
-    // Check interaction
+    /**
+     * 检查鼠标是否与高度控制柄交互
+     *
+     * @param mousePoint - 鼠标标准化设备坐标
+     * @returns 是否交互
+     */
     public checkInteraction(mousePoint: THREE.Vector2): boolean {
         if (!this.currentPoint) return false;
 
@@ -103,6 +182,12 @@ export class HeightAdjustManager extends THREE.Object3D {
         return isIntersecting;
     }
 
+    /**
+     * 使用已有的射线投射器检查高度控制柄交互
+     *
+     * @param raycaster - 射线投射器
+     * @returns 是否交互
+     */
     public checkHeightHandleInteraction(raycaster: THREE.Raycaster): boolean {
         if (!this.currentPoint || !this.heightHandle.isVisible) {
             return false;
@@ -111,7 +196,10 @@ export class HeightAdjustManager extends THREE.Object3D {
         return this.heightHandle.checkIntersection(raycaster, this.mapView.getRteCamera());
     }
 
-    // Get current point's height handle world position (compatible with old interface)
+    /**
+     * 获取高度控制柄的世界位置
+     * @returns 世界位置或 null
+     */
     public getHeightHandleWorldPosition(): THREE.Vector3 | null {
         if (!this.currentPoint) {
             return null;
@@ -122,13 +210,24 @@ export class HeightAdjustManager extends THREE.Object3D {
         return position;
     }
 
-    public attachToLineVertex(line: any, vertexIndex: number): void {
-        if (!line || !line.getVertexPoints || vertexIndex < 0) {
+    /**
+     * 将高度控制柄附加到线或多边形的顶点
+     *
+     * @param vertexContainer - 包含顶点的对象（DrawLine 或 DrawPolygon）
+     * @param vertexIndex - 顶点索引
+     *
+     * 说明：使用类型守卫和联合类型替代 any，确保类型安全
+     */
+    public attachToLineVertex(
+        vertexContainer: DrawLine | DrawPolygon | VertexContainer,
+        vertexIndex: number
+    ): void {
+        if (!isVertexContainer(vertexContainer) || vertexIndex < 0) {
             this.detach();
             return;
         }
 
-        const vertexPoints = line.getVertexPoints();
+        const vertexPoints = vertexContainer.getVertexPoints();
         if (vertexIndex >= vertexPoints.length) {
             this.detach();
             return;
@@ -138,7 +237,12 @@ export class HeightAdjustManager extends THREE.Object3D {
         this.attachToPoint(vertexPoint);
     }
 
-    // Start height adjustment
+    /**
+     * 开始高度调整
+     *
+     * @param event - 鼠标事件
+     * @returns 是否成功开始调整
+     */
     public startAdjustment(event: MouseEvent): boolean {
         if (!this.currentPoint) return false;
 
@@ -153,27 +257,20 @@ export class HeightAdjustManager extends THREE.Object3D {
             this.startHeight = this.currentPoint.getHeight();
             this.heightHandle.setActiveState(true);
 
-            // According to user's algorithm idea: form a plane from click position and arrow direction
             const arrowDirection = this.heightHandle.getDirection();
             const handleWorldPos = new THREE.Vector3();
             this.heightHandle.getWorldPosition(handleWorldPos);
 
-            // Create ray for determining drag plane
             const startRaycaster = new THREE.Raycaster();
             startRaycaster.setFromCamera(mousePoint, this.mapView.getRteCamera());
 
-            // Method 1: Create a plane perpendicular to the camera's line of sight direction, which contains the arrow start point and arrow direction
-            // This way, mouse movement can be effectively mapped to the arrow direction from any viewing angle
             const cameraDirection = new THREE.Vector3();
             this.mapView.camera.getWorldDirection(cameraDirection);
 
-            // The plane normal is the camera's line of sight direction
             this.adjustmentPlane.setFromNormalAndCoplanarPoint(cameraDirection, handleWorldPos);
 
-            // Record the intersection point of the mouse on the plane when starting to drag
             if (!startRaycaster.ray.intersectPlane(this.adjustmentPlane, this.startIntersection)) {
                 console.warn("Unable to calculate initial intersection point, using backup method");
-                // Backup method: Find a point on the ray closest to the arrow position
                 startRaycaster.ray.closestPointToPoint(handleWorldPos, this.startIntersection);
             }
 
@@ -184,11 +281,14 @@ export class HeightAdjustManager extends THREE.Object3D {
         return false;
     }
 
-    // Handle height adjustment
+    /**
+     * 处理高度调整（拖拽中）
+     *
+     * @param event - 鼠标事件
+     */
     public handleAdjustment(event: MouseEvent): void {
         if (!this.isAdjusting || !this.currentPoint) return;
 
-        // Get ray from current mouse position
         const currentMousePoint = new THREE.Vector2(
             (event.offsetX / this.mapView.canvas.width) * 2 - 1,
             -(event.offsetY / this.mapView.canvas.height) * 2 + 1
@@ -197,39 +297,29 @@ export class HeightAdjustManager extends THREE.Object3D {
         const currentRaycaster = new THREE.Raycaster();
         currentRaycaster.setFromCamera(currentMousePoint, this.mapView.getRteCamera());
 
-        // Calculate intersection point of current mouse on adjustment plane
         const currentIntersection = new THREE.Vector3();
         if (currentRaycaster.ray.intersectPlane(this.adjustmentPlane, currentIntersection)) {
-            // According to user's algorithm idea: height is the height difference between the two
             const arrowDirection = this.heightHandle.getDirection();
-
-            // Calculate vector from initial intersection to current intersection
             const displacement = currentIntersection.clone().sub(this.startIntersection);
-
-            // Project onto arrow direction to get height change
             const heightDelta = displacement.dot(arrowDirection);
-
-            // Calculate new height (don't use sensitivity, keep height change consistent with mouse movement)
             const newHeight = this.startHeight + heightDelta;
-            // Remove minimum height restriction, allow negative heights
-            // const minHeight = 0;
-            // const adjustedHeight = Math.max(minHeight, newHeight);
-            const adjustedHeight = newHeight;
 
-            this.currentPoint.setHeight(adjustedHeight);
+            this.currentPoint.setHeight(newHeight);
 
-            // Trigger height change event
             if (this.onHeightChanged) {
-                this.onHeightChanged(this.currentPoint, adjustedHeight);
+                this.onHeightChanged(this.currentPoint, newHeight);
             }
 
-            // Update height handle position, keep synchronized
             this.update();
-        } else {
         }
     }
 
-    // Handle mouse wheel adjustment
+    /**
+     * 处理滚轮高度调整
+     *
+     * @param event - 滚轮事件
+     * @returns 是否处理了事件
+     */
     public handleWheelAdjustment(event: WheelEvent): boolean {
         if (!this.currentPoint) return false;
 
@@ -242,8 +332,6 @@ export class HeightAdjustManager extends THREE.Object3D {
             const currentHeight = this.currentPoint.getHeight();
             const wheelSensitivity = 0.5;
             const delta = -event.deltaY * wheelSensitivity;
-            // Remove minimum height restriction, allow negative heights
-            // const newHeight = Math.max(0, currentHeight + delta);
             const newHeight = currentHeight + delta;
 
             this.currentPoint.setHeight(newHeight);
@@ -254,39 +342,54 @@ export class HeightAdjustManager extends THREE.Object3D {
         return false;
     }
 
-    // End adjustment
+    /**
+     * 结束高度调整
+     */
     public endAdjustment(): void {
         this.isAdjusting = false;
         this.heightHandle.setActiveState(false);
     }
 
-    // Update method (called every frame)
+    /**
+     * 更新方法（每帧调用）
+     * 同步控制柄位置和尺寸
+     */
     public update(): void {
         if (this.currentPoint && this.heightHandle.isVisible) {
-            // Update handle position and size
             const worldPos = this.mapView.projection.projectPoint(this.currentPoint.getCenter());
             this.heightHandle.position.copy(worldPos);
             this.heightHandle.updateSize(this.mapView.camera, this.mapView.renderer);
         }
     }
 
-    // Override dispose method
+    /**
+     * 释放资源
+     */
     public dispose(): void {
         this.heightHandle.dispose();
         this.removeFromParent();
     }
 
-    // Get current point
+    /**
+     * 获取当前点对象
+     * @returns 当前点对象或 null
+     */
     public getCurrentPoint(): PointObject | null {
         return this.currentPoint;
     }
 
-    // Is adjusting
+    /**
+     * 获取是否正在调整
+     * @returns 是否正在调整高度
+     */
     public getIsAdjusting(): boolean {
         return this.isAdjusting;
     }
 
-    // Get height handle
+    /**
+     * 获取高度控制柄
+     * @returns HeightHandle 实例
+     */
     public getHeightHandle(): HeightHandle {
         return this.heightHandle;
     }

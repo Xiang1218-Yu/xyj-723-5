@@ -1,31 +1,46 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// FixedSizeArrow.ts
 import * as THREE from "three";
 
 /**
- * Fixed size arrow component options
+ * 固定尺寸箭头组件选项接口
  */
 export interface FixedSizeArrowOptions {
-    /** Arrow size (pixels) */
+    /** 箭头尺寸（像素） */
     size?: number;
-    /** Arrow head color */
-    headColor?: THREE.Color | number | string;
-    /** Arrow shaft color */
-    shaftColor?: THREE.Color | number | string;
-    /** Whether visible */
+    /** 箭头头部颜色 */
+    headColor?: THREE.ColorRepresentation;
+    /** 箭杆颜色 */
+    shaftColor?: THREE.ColorRepresentation;
+    /** 是否可见 */
     visible?: boolean;
-    /** Opacity (0-1) */
+    /** 不透明度 (0-1) */
     opacity?: number;
 }
 
 /**
- * Fixed size arrow component
- * Inherits from THREE.Object3D, maintains fixed size in screen space
+ * 固定尺寸箭头组件用户数据接口
+ * 用于类型安全的用户数据访问
+ */
+interface FixedSizeArrowUserData {
+    /** 是否为固定尺寸箭头标记 */
+    isFixedSizeArrow: true;
+}
+
+/**
+ * 固定尺寸箭头组件
+ *
+ * 职责：
+ * - 继承 THREE.Object3D，在屏幕空间保持固定尺寸
+ * - 管理箭头头部和箭杆的几何体与材质
+ * - 根据相机距离自动缩放以保持屏幕尺寸恒定
+ * - 类型安全的属性访问，消除 any 类型
  */
 export class FixedSizeArrow extends THREE.Object3D {
-    // Default options
-    private static readonly DEFAULT_OPTIONS: FixedSizeArrowOptions = {
+    /**
+     * 默认选项常量
+     */
+    private static readonly DEFAULT_OPTIONS: Required<FixedSizeArrowOptions> = {
         size: 40,
         headColor: 0xe65c00,
         shaftColor: 0xf9d423,
@@ -33,51 +48,80 @@ export class FixedSizeArrow extends THREE.Object3D {
         opacity: 1.0
     };
 
-    // Member variables
+    /**
+     * 当前尺寸（像素）
+     */
     private _size: number;
-    private _headColor: THREE.Color;
-    private _shaftColor: THREE.Color;
-    private _opacity: number;
-    private _headMesh: THREE.Mesh | null = null;
-    private _shaftMesh: THREE.Mesh | null = null;
-    private readonly _options: FixedSizeArrowOptions;
 
     /**
-     * Create fixed size arrow
-     * @param options Arrow configuration options
+     * 箭头头部颜色
+     */
+    private _headColor: THREE.Color;
+
+    /**
+     * 箭杆颜色
+     */
+    private _shaftColor: THREE.Color;
+
+    /**
+     * 不透明度
+     */
+    private _opacity: number;
+
+    /**
+     * 箭头头部网格
+     */
+    private _headMesh: THREE.Mesh | null = null;
+
+    /**
+     * 箭杆网格
+     */
+    private _shaftMesh: THREE.Mesh | null = null;
+
+    /**
+     * 合并后的选项
+     */
+    private readonly _options: Required<FixedSizeArrowOptions>;
+
+    /**
+     * 类型安全的用户数据
+     */
+    public override userData: FixedSizeArrowUserData;
+
+    /**
+     * 创建固定尺寸箭头
+     *
+     * @param options - 箭头配置选项
      */
     constructor(options: FixedSizeArrowOptions = {}) {
         super();
 
-        // Merge options
         this._options = { ...FixedSizeArrow.DEFAULT_OPTIONS, ...options };
 
-        // Initialize properties
-        this._size = this._options.size!;
-        this._headColor = new THREE.Color(this._options.headColor!);
-        this._shaftColor = new THREE.Color(this._options.shaftColor!);
+        this._size = this._options.size;
+        this._headColor = new THREE.Color(this._options.headColor);
+        this._shaftColor = new THREE.Color(this._options.shaftColor);
+        this._opacity = this._options.opacity;
 
-        // Create arrow geometry
+        this.userData = {
+            isFixedSizeArrow: true
+        };
+
         this.createArrowGeometry();
-
-        // Mark as fixed size object
-        (this as any).isFixedSizeArrow = true;
     }
 
     /**
-     * Create arrow geometry
+     * 创建箭头几何体
+     * 内部方法，初始化头部和箭杆
      */
     private createArrowGeometry(): void {
-        // Clear existing geometry
         this.clear();
 
-        // Calculate geometry dimensions (using unit dimensions, final size controlled by scaling)
-        const headLength = 0.6; // Head length
-        const headWidth = 0.4; // Head width
-        const shaftLength = 0.8; // Shaft length
-        const shaftWidth = 0.1; // Shaft width
+        const headLength = 0.6;
+        const headWidth = 0.4;
+        const shaftLength = 0.8;
+        const shaftWidth = 0.1;
 
-        // Create arrow head
         const headGeometry = new THREE.ConeGeometry(headWidth / 2, headLength, 8);
         const headMaterial = new THREE.MeshBasicMaterial({
             color: this._headColor,
@@ -90,7 +134,6 @@ export class FixedSizeArrow extends THREE.Object3D {
         this._headMesh.position.y = shaftLength + headLength / 2;
         this.add(this._headMesh);
 
-        // Create arrow shaft
         const shaftGeometry = new THREE.CylinderGeometry(
             shaftWidth / 2,
             shaftWidth / 2,
@@ -110,36 +153,31 @@ export class FixedSizeArrow extends THREE.Object3D {
     }
 
     /**
-     * Update arrow size to maintain fixed screen space size
-     * @param camera Camera
-     * @param renderer Renderer (optional, for more accurate size calculation)
+     * 更新箭头尺寸以保持屏幕空间固定大小
+     *
+     * @param camera - 相机对象
+     * @param renderer - 渲染器（可选，用于更精确的尺寸计算）
      */
     public updateSize(camera: THREE.Camera, renderer?: THREE.WebGLRenderer): void {
         if (!camera) return;
 
-        // Calculate distance factor
         const worldPos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
         const distance = worldPos.length();
-        // Calculate scale factor to maintain screen space size
         let scaleFactor: number;
 
         if (camera instanceof THREE.PerspectiveCamera) {
-            // Perspective camera calculation
             const fov = camera.fov * (Math.PI / 180);
             const screenHeight = 2 * Math.tan(fov / 2) * distance;
-            const canvasHeight = renderer?.domElement.height || window.innerHeight;
+            const canvasHeight = renderer?.domElement.height ?? window.innerHeight;
             scaleFactor = (this._size / canvasHeight) * screenHeight;
         } else if (camera instanceof THREE.OrthographicCamera) {
-            // Orthographic camera calculation
             const zoom = camera.zoom;
-            const canvasHeight = renderer?.domElement.height || window.innerHeight;
+            const canvasHeight = renderer?.domElement.height ?? window.innerHeight;
             scaleFactor = (this._size * zoom) / canvasHeight;
 
-            // Consider orthographic camera range
             const height = camera.top - camera.bottom;
             scaleFactor *= height;
         } else {
-            // Default calculation
             scaleFactor = (distance * this._size) / 1000;
         }
 
@@ -147,28 +185,28 @@ export class FixedSizeArrow extends THREE.Object3D {
     }
 
     /**
-     * Set arrow size
-     * @param size New size (pixels)
+     * 设置箭头尺寸
+     * @param size - 新尺寸（像素）
      */
     public setSize(size: number): void {
         if (this._size !== size) {
             this._size = Math.max(1, size);
-            // No need to recreate geometry since size is controlled by scaling
         }
     }
 
     /**
-     * Get arrow size
+     * 获取箭头尺寸
+     * @returns 当前尺寸（像素）
      */
     public getSize(): number {
         return this._size;
     }
 
     /**
-     * Set head color
-     * @param color Color value
+     * 设置箭头头部颜色
+     * @param color - 颜色值
      */
-    public setHeadColor(color: THREE.Color | number | string): void {
+    public setHeadColor(color: THREE.ColorRepresentation): void {
         this._headColor = new THREE.Color(color);
         if (this._headMesh && this._headMesh.material instanceof THREE.MeshBasicMaterial) {
             this._headMesh.material.color.copy(this._headColor);
@@ -176,17 +214,18 @@ export class FixedSizeArrow extends THREE.Object3D {
     }
 
     /**
-     * Get head color
+     * 获取箭头头部颜色
+     * @returns 头部颜色副本
      */
     public getHeadColor(): THREE.Color {
         return this._headColor.clone();
     }
 
     /**
-     * Set arrow color
-     * @param color Color value
+     * 设置箭杆颜色
+     * @param color - 颜色值
      */
-    public setShaftColor(color: THREE.Color | number | string): void {
+    public setShaftColor(color: THREE.ColorRepresentation): void {
         this._shaftColor = new THREE.Color(color);
         if (this._shaftMesh && this._shaftMesh.material instanceof THREE.MeshBasicMaterial) {
             this._shaftMesh.material.color.copy(this._shaftColor);
@@ -194,15 +233,16 @@ export class FixedSizeArrow extends THREE.Object3D {
     }
 
     /**
-     * Get shaft color
+     * 获取箭杆颜色
+     * @returns 箭杆颜色副本
      */
     public getShaftColor(): THREE.Color {
         return this._shaftColor.clone();
     }
 
     /**
-     * Set arrow opacity
-     * @param opacity Opacity (0-1)
+     * 设置箭头不透明度
+     * @param opacity - 不透明度 (0-1)
      */
     public setOpacity(opacity: number): void {
         this._opacity = THREE.MathUtils.clamp(opacity, 0, 1);
@@ -219,144 +259,179 @@ export class FixedSizeArrow extends THREE.Object3D {
     }
 
     /**
-     * Get opacity
+     * 获取不透明度
+     * @returns 当前不透明度
      */
     public getOpacity(): number {
         return this._opacity;
     }
 
     /**
-     * Destroy arrow, release resources
+     * 销毁箭头，释放资源
      */
     public dispose(): void {
         if (this._headMesh) {
             this._headMesh.geometry.dispose();
-            if (Array.isArray(this._headMesh.material)) {
-                this._headMesh.material.forEach(material => {
-                    material.dispose();
-                });
-            } else {
-                this._headMesh.material.dispose();
-            }
+            this.disposeMaterial(this._headMesh.material);
         }
 
         if (this._shaftMesh) {
             this._shaftMesh.geometry.dispose();
-            if (Array.isArray(this._shaftMesh.material)) {
-                this._shaftMesh.material.forEach(material => {
-                    material.dispose();
-                });
-            } else {
-                this._shaftMesh.material.dispose();
-            }
+            this.disposeMaterial(this._shaftMesh.material);
         }
 
         this.clear();
     }
-}
-
-/**
- * Fixed size arrow system
- * Used to manage updates of multiple fixed size arrows
- */
-export class FixedSizeArrowSystem {
-    private readonly _arrows = new Set<FixedSizeArrow>();
-    private _camera: THREE.Camera | null = null;
-    private _renderer: THREE.WebGLRenderer | null = null;
 
     /**
-     * Create arrow system
-     * @param camera Camera
-     * @param renderer Renderer (optional)
+     * 安全释放材质资源
+     * @param material - 材质或材质数组
      */
-    constructor(camera: THREE.Camera, renderer?: THREE.WebGLRenderer) {
-        this._camera = camera;
-        this._renderer = renderer || null;
+    private disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+        if (Array.isArray(material)) {
+            material.forEach(mat => mat.dispose());
+        } else {
+            material.dispose();
+        }
     }
 
     /**
-     * Add arrow to system
-     * @param arrow Arrow instance
+     * 类型守卫：检查对象是否为 FixedSizeArrow
+     * @param obj - 待检查对象
+     * @returns 是否为 FixedSizeArrow 实例
+     */
+    public static isFixedSizeArrow(obj: unknown): obj is FixedSizeArrow {
+        return (
+            obj instanceof FixedSizeArrow ||
+            (obj !== null &&
+                typeof obj === "object" &&
+                (obj as { userData?: FixedSizeArrowUserData }).userData?.isFixedSizeArrow === true)
+        );
+    }
+}
+
+/**
+ * 固定尺寸箭头系统
+ *
+ * 职责：
+ * - 管理多个 FixedSizeArrow 实例
+ * - 统一更新所有箭头的尺寸
+ * - 类型安全的箭头集合管理
+ */
+export class FixedSizeArrowSystem {
+    /**
+     * 箭头集合
+     */
+    private readonly _arrows = new Set<FixedSizeArrow>();
+
+    /**
+     * 相机引用
+     */
+    private _camera: THREE.Camera | null = null;
+
+    /**
+     * 渲染器引用
+     */
+    private _renderer: THREE.WebGLRenderer | null = null;
+
+    /**
+     * 创建箭头系统
+     *
+     * @param camera - 相机
+     * @param renderer - 渲染器（可选）
+     */
+    constructor(camera: THREE.Camera, renderer?: THREE.WebGLRenderer) {
+        this._camera = camera;
+        this._renderer = renderer ?? null;
+    }
+
+    /**
+     * 向系统添加箭头
+     * @param arrow - FixedSizeArrow 实例
      */
     public add(arrow: FixedSizeArrow): void {
         this._arrows.add(arrow);
     }
 
     /**
-     * Remove arrow from system
-     * @param arrow Arrow instance
+     * 从系统移除箭头
+     * @param arrow - FixedSizeArrow 实例
      */
     public remove(arrow: FixedSizeArrow): void {
         this._arrows.delete(arrow);
     }
 
     /**
-     * Check if arrow is included
-     * @param arrow Arrow instance
+     * 检查是否包含指定箭头
+     * @param arrow - FixedSizeArrow 实例
+     * @returns 是否包含
      */
     public has(arrow: FixedSizeArrow): boolean {
         return this._arrows.has(arrow);
     }
 
     /**
-     * Get all arrows
+     * 获取所有箭头
+     * @returns 箭头数组副本
      */
     public getArrows(): FixedSizeArrow[] {
         return Array.from(this._arrows);
     }
 
     /**
-     * Clear all arrows
+     * 清空所有箭头
      */
     public clear(): void {
         this._arrows.clear();
     }
 
     /**
-     * Update size of all arrows
+     * 更新所有箭头的尺寸
      */
     public update(): void {
         if (!this._camera) return;
 
         this._arrows.forEach(arrow => {
-            if ((arrow as any).isFixedSizeArrow) {
-                arrow.updateSize(this._camera!, this._renderer);
+            if (FixedSizeArrow.isFixedSizeArrow(arrow)) {
+                arrow.updateSize(this._camera!, this._renderer ?? undefined);
             }
         });
     }
 
     /**
-     * Set camera
-     * @param camera Camera instance
+     * 设置相机
+     * @param camera - 相机实例
      */
     public setCamera(camera: THREE.Camera): void {
         this._camera = camera;
     }
 
     /**
-     * Get current camera
+     * 获取当前相机
+     * @returns 相机实例或 null
      */
     public getCamera(): THREE.Camera | null {
         return this._camera;
     }
 
     /**
-     * Set renderer
-     * @param renderer Renderer instance
+     * 设置渲染器
+     * @param renderer - 渲染器实例
      */
     public setRenderer(renderer: THREE.WebGLRenderer): void {
         this._renderer = renderer;
     }
 
     /**
-     * Get current renderer
+     * 获取当前渲染器
+     * @returns 渲染器实例或 null
      */
     public getRenderer(): THREE.WebGLRenderer | null {
         return this._renderer;
     }
 
     /**
-     * Destroy system, release resources
+     * 销毁系统，释放所有资源
      */
     public dispose(): void {
         this._arrows.forEach(arrow => {

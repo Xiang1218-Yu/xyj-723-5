@@ -7,26 +7,64 @@ import { Line2 } from "three/examples/jsm/lines/Line2";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 
 import { DrawLine } from "./DrawLine";
+import { DrawMaterialFactory } from "./DrawMaterialFactory";
+import { DrawableType } from "./DrawTypes";
 
 /**
- * Measurement line class
- * Adds measurement display functionality to ordinary lines, including distance labels and arrows
+ * 测量线类
+ *
+ * 职责：
+ * - 继承 DrawLine 的线绘制功能
+ * - 添加距离计算和测量显示功能
+ * - 使用专用的测量线材质样式
+ * - 材质创建委托给 DrawMaterialFactory（单一职责）
  */
 export class MeasureLine extends DrawLine {
+    /**
+     * 箭头线数组（预留功能）
+     */
     private arrowLines: Line2[] = [];
+
+    /**
+     * 标准化设备坐标顶点数组
+     */
     private ndcVertexs: THREE.Vector3[] = [];
+
+    /**
+     * 测量距离（米）
+     */
     private distance: number = 0;
 
+    /**
+     * 构造函数
+     *
+     * @param mapView - 地图视图实例
+     * @param vertices - 顶点坐标数组
+     * @param id - 可选的对象 ID
+     */
     constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
         super(mapView, vertices, id);
-
         this.updateMeasureDisplay();
     }
 
+    /**
+     * 获取绘制对象类型
+     * @returns 测量线对象类型标识
+     */
+    public getDrawableType(): DrawableType {
+        return DrawableType.MEASURE_LINE;
+    }
+
+    /**
+     * 相机位置变化回调
+     * 更新 NDC 坐标
+     */
     protected onCameraPositionChanged(): void {
-        this.vertices.map((geo, index) => {
+        this.vertices.forEach((geo, index) => {
             const v = this.mapView.getScreenPosition(geo);
-            if (!this.ndcVertexs[index]) this.ndcVertexs[index] = new THREE.Vector3();
+            if (!this.ndcVertexs[index]) {
+                this.ndcVertexs[index] = new THREE.Vector3();
+            }
             this.ndcVertexs[index].set(
                 v.x / this.mapView.canvas.width,
                 v.y / this.mapView.canvas.height,
@@ -39,10 +77,7 @@ export class MeasureLine extends DrawLine {
      * 更新测量显示
      */
     public update(): void {
-        // Call parent class update method
         super.update();
-
-        // Update measurement display
         this.updateMeasureDisplay();
     }
 
@@ -51,8 +86,7 @@ export class MeasureLine extends DrawLine {
      */
     private updateMeasureDisplay(): void {
         if (!this.vertices || this.vertices.length < 2) {
-            // If vertex count is less than 2, hide arrows
-            if (this.arrowLines && this.arrowLines.length > 0) {
+            if (this.arrowLines.length > 0) {
                 this.arrowLines.forEach(arrow => {
                     arrow.visible = false;
                 });
@@ -60,7 +94,6 @@ export class MeasureLine extends DrawLine {
             return;
         }
 
-        // Calculate distance
         this.distance = this.calculateDistance();
 
         this.ndcVertexs = this.vertices.map(geo => {
@@ -71,13 +104,11 @@ export class MeasureLine extends DrawLine {
                 0
             );
         });
-
-        // Note: Label display has been moved to MeasureToolControls for unified management
     }
 
     /**
-     * Calculate total distance of line segment
-     * @returns Distance (meters)
+     * 计算线段总距离
+     * @returns 距离（米）
      */
     private calculateDistance(): number {
         if (!this.vertices || this.vertices.length < 2) {
@@ -95,14 +126,14 @@ export class MeasureLine extends DrawLine {
     }
 
     /**
-     * Calculate distance between two points
-     * @param point1 First point
-     * @param point2 Second point
-     * @returns Distance (meters)
+     * 计算两点间距离（Haversine 公式）
+     *
+     * @param point1 - 第一个点
+     * @param point2 - 第二个点
+     * @returns 距离（米）
      */
     private calculateSegmentDistance(point1: GeoCoordinates, point2: GeoCoordinates): number {
-        // Use Haversine formula to calculate distance between two points on Earth's surface
-        const R = 6371e3; // Earth radius (meters)
+        const R = 6371e3;
         const lat1 = (point1.latitude * Math.PI) / 180;
         const lat2 = (point2.latitude * Math.PI) / 180;
         const deltaLat = ((point2.latitude - point1.latitude) * Math.PI) / 180;
@@ -117,9 +148,10 @@ export class MeasureLine extends DrawLine {
     }
 
     /**
-     * Format distance display
-     * @param distance Distance (meters)
-     * @returns Formatted distance string
+     * 格式化距离显示
+     *
+     * @param distance - 距离（米）
+     * @returns 格式化后的距离字符串
      */
     public formatDistance(distance: number): string {
         if (distance < 1) {
@@ -132,14 +164,13 @@ export class MeasureLine extends DrawLine {
     }
 
     /**
-     * Override parent class update visual effects method
+     * 更新线视觉效果
+     * 重写父类方法，保持箭头可见
      */
     protected updateVisuals(): void {
-        // Call parent class method
         super.updateVisuals();
 
-        // Update arrow visibility - always visible
-        if (this.arrowLines && this.arrowLines.length > 0) {
+        if (this.arrowLines.length > 0) {
             this.arrowLines.forEach(arrow => {
                 arrow.visible = true;
             });
@@ -147,64 +178,50 @@ export class MeasureLine extends DrawLine {
     }
 
     /**
-     * Override parent class line material creation method to make measurement lines use dashed blue style
+     * 创建线材质
+     * 重写父类方法，使用测量线专用样式（黑色虚线）
+     *
+     * @returns LineMaterial 实例
+     *
+     * 说明：委托给 DrawMaterialFactory 统一创建材质
      */
-    protected createLineMaterial(color: number, linewidth: number): LineMaterial {
-        return new LineMaterial({
-            color: 0x000000, // Blue
-            linewidth: 2,
-            dashed: true, // Dashed
-            dashSize: 0.5,
-            gapSize: 0.3,
-            depthTest: false,
-            depthWrite: false,
-
-            opacity: 1.0,
-            transparent: true,
-            alphaToCoverage: true
-        });
+    protected createLineMaterial(): LineMaterial {
+        return DrawMaterialFactory.createMeasureLineMaterial();
     }
 
     /**
-     * Override parent class outline material creation method to make outline lines use dashed blue style
+     * 创建轮廓材质
+     * 重写父类方法，使用测量线轮廓样式（白色虚线）
+     *
+     * @returns LineMaterial 实例
+     *
+     * 说明：委托给 DrawMaterialFactory 统一创建材质
      */
     protected createOutlineMaterial(): LineMaterial {
-        return new LineMaterial({
-            color: 0xffffff, // White outline
-            linewidth: 2,
-            dashed: true,
-            dashSize: 0.8,
-            gapSize: 0.4,
-            depthTest: false,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.8
-        });
+        return DrawMaterialFactory.createMeasureLineOutlineMaterial();
     }
 
     /**
-     * Get measurement distance
-     * @returns Distance (meters)
+     * 获取测量距离
+     * @returns 距离（米）
      */
     public getDistance(): number {
         return this.distance;
     }
 
     /**
-     * Release resources
+     * 释放资源
      */
     public dispose(): void {
-        // Clean up arrow lines
-        if (this.arrowLines && this.arrowLines.length > 0) {
+        if (this.arrowLines.length > 0) {
             this.arrowLines.forEach(arrow => {
                 this.remove(arrow);
-                arrow.geometry.dispose();
-                (arrow.material as THREE.Material).dispose();
+                DrawMaterialFactory.disposeGeometry(arrow.geometry);
+                DrawMaterialFactory.disposeMaterial(arrow.material);
             });
             this.arrowLines = [];
         }
 
-        // Call parent class cleanup method
         super.dispose();
     }
 }

@@ -6,63 +6,89 @@ import * as THREE from "three";
 import { getShaderMaterialDefine, setShaderMaterialDefine } from "./Utils";
 
 /**
- * [[RawShaderMaterial]] parameters.
+ * RawShaderMaterial 参数接口
+ * 包含渲染器能力信息
  */
 export interface RendererMaterialParameters {
+    /** WebGL 渲染器能力信息 */
     rendererCapabilities: THREE.WebGLCapabilities;
 }
 
+/**
+ * RawShaderMaterial 构造参数
+ * 继承自 THREE.ShaderMaterialParameters 并添加 rendererCapabilities
+ */
 export interface RawShaderMaterialParameters
     extends RendererMaterialParameters,
         THREE.ShaderMaterialParameters {}
 
 /**
- * Base class for all raw shader materials. Ensures WebGL2 compatibility for WebGL1 shaders.
+ * 内部 Shader 参数类型（移除了 rendererCapabilities）
+ * 用于传递给 THREE.RawShaderMaterial 构造函数
+ */
+type InternalShaderParameters = Omit<RawShaderMaterialParameters, "rendererCapabilities">;
+
+/**
+ * 所有原始着色器材质的基类
+ *
+ * 职责：
+ * - 确保 WebGL1 着色器与 WebGL2 兼容
+ * - 自动处理着色器版本转换
+ * - 管理 fog 和对数深度缓冲区的 shader defines
+ * - 类型安全的参数处理
  */
 export class RawShaderMaterial extends THREE.RawShaderMaterial {
     /**
-     * The constructor of `RawShaderMaterial`.
+     * 构造函数
      *
-     * @param params - `RawShaderMaterial` parameters.  Always required except when cloning
-     * another material.
+     * @param params - RawShaderMaterial 参数，克隆时可选
      */
     constructor(params?: RawShaderMaterialParameters) {
         const isWebGL2 = params?.rendererCapabilities.isWebGL2 === true;
 
-        const shaderParams: THREE.ShaderMaterialParameters | undefined = params
-            ? {
-                  ...params,
-                  glslVersion: isWebGL2 ? THREE.GLSL3 : THREE.GLSL1,
-                  vertexShader:
-                      isWebGL2 && params.vertexShader
-                          ? convertVertexShaderToWebGL2(params.vertexShader)
-                          : params.vertexShader,
-                  fragmentShader:
-                      isWebGL2 && params.fragmentShader
-                          ? convertFragmentShaderToWebGL2(params.fragmentShader)
-                          : params.fragmentShader
-              }
-            : undefined;
-        // Remove properties that are not in THREE.ShaderMaterialParameters, otherwise THREE.js
-        // will log warnings.
-        if (shaderParams) {
-            delete (shaderParams as any).rendererCapabilities;
+        let shaderParams: InternalShaderParameters | undefined;
+
+        if (params) {
+            const { rendererCapabilities: _caps, ...restParams } = params;
+            void _caps;
+
+            shaderParams = {
+                ...restParams,
+                glslVersion: isWebGL2 ? THREE.GLSL3 : THREE.GLSL1,
+                vertexShader:
+                    isWebGL2 && params.vertexShader
+                        ? convertVertexShaderToWebGL2(params.vertexShader)
+                        : params.vertexShader,
+                fragmentShader:
+                    isWebGL2 && params.fragmentShader
+                        ? convertFragmentShaderToWebGL2(params.fragmentShader)
+                        : params.fragmentShader
+            };
         }
-        super(shaderParams);
+
+        super(shaderParams as THREE.ShaderMaterialParameters);
         this.invalidateFog();
         this.invalidateLogarithmicDepthBuffer(
-            params?.rendererCapabilities.logarithmicDepthBuffer as boolean
+            params?.rendererCapabilities.logarithmicDepthBuffer === true
         );
         this.setOpacity(shaderParams?.opacity);
     }
 
-    invalidateFog() {
+    /**
+     * 检查并更新 fog 的 shader define
+     */
+    invalidateFog(): void {
         if (this.defines !== undefined && this.fog !== getShaderMaterialDefine(this, "USE_FOG")) {
             setShaderMaterialDefine(this, "USE_FOG", this.fog);
         }
     }
 
-    invalidateLogarithmicDepthBuffer(logarithmicDepthBuffer: boolean) {
+    /**
+     * 检查并更新对数深度缓冲区的 shader define
+     *
+     * @param logarithmicDepthBuffer - 是否启用对数深度缓冲区
+     */
+    invalidateLogarithmicDepthBuffer(logarithmicDepthBuffer: boolean): void {
         if (
             this.defines !== undefined &&
             logarithmicDepthBuffer !== getShaderMaterialDefine(this, "USE_LOGDEPTHBUF")
@@ -72,13 +98,12 @@ export class RawShaderMaterial extends THREE.RawShaderMaterial {
     }
 
     /**
-     * To set the material's opacity property value and also update the opacity value of the uniforms if needed.
-     * @param opacity If undefined, the value is not set
+     * 设置材质的 opacity 属性，并在需要时更新 uniforms 的 opacity 值
+     *
+     * @param opacity - 不透明度值，undefined 则不设置
      */
-    setOpacity(opacity?: number) {
+    setOpacity(opacity?: number): void {
         if (opacity !== undefined) {
-            // The base constructor may set the opacity property before,
-            // therefore we don't check unequality of the current and new opacity value:
             this.opacity = opacity;
             if (this.uniforms?.opacity) {
                 this.uniforms.opacity.value = opacity;

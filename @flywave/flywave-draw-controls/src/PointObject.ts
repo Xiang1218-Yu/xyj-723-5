@@ -1,22 +1,72 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// src/PointObject.ts
+import {
+    type FeatureGeometry,
+    type Point as GeoJsonPoint
+} from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
 
 import { DrawableObject } from "./DrawableObject";
+import { DrawMaterialFactory } from "./DrawMaterialFactory";
+import { type DrawPointGeometry, DrawableType } from "./DrawTypes";
 
-// Texture cache
+/**
+ * 点纹理缓存
+ * 使用 Map 缓存已创建的纹理，避免重复创建
+ */
 const textureCache = new Map<string, THREE.Texture>();
 
+/**
+ * 点绘制对象类
+ *
+ * 职责：
+ * - 管理点对象的几何体和视觉表现（精灵和选中环）
+ * - 处理顶点状态（普通/顶点标记）
+ * - 响应选中/编辑状态变化
+ * - 纹理创建和缓存管理
+ * - 材质创建委托给 DrawMaterialFactory（单一职责）
+ */
 export class PointObject extends DrawableObject {
+    /**
+     * 精灵对象
+     */
     private readonly sprite: THREE.Sprite;
+
+    /**
+     * 精灵材质引用
+     */
     private spriteMaterial: THREE.SpriteMaterial;
-    private readonly ringMesh: THREE.Mesh;
-    public isVertex: boolean;
+
+    /**
+     * 选中环网格（仅普通点有）
+     */
+    private readonly ringMesh: THREE.Mesh | null;
+
+    /**
+     * 是否为顶点标记（区别于独立点）
+     */
+    public readonly isVertex: boolean;
+
+    /**
+     * 基础颜色
+     */
     private readonly baseColor: number;
 
+    /**
+     * 环材质引用
+     */
+    private ringMaterial: THREE.MeshBasicMaterial | null;
+
+    /**
+     * 构造函数
+     *
+     * @param mapView - 地图视图实例
+     * @param position - 点位置坐标
+     * @param isVertex - 是否为顶点标记（默认 false）
+     * @param id - 可选的对象 ID
+     */
     constructor(
         mapView: MapView,
         position: GeoCoordinates,
@@ -26,32 +76,28 @@ export class PointObject extends DrawableObject {
         super(mapView, id);
         this.vertices = [position];
         this.isVertex = isVertex;
-        this.baseColor = isVertex ? 0xff6b6b : 0x4ecdc4;
+        this.baseColor = isVertex
+            ? DrawMaterialFactory.getVertexColor()
+            : DrawMaterialFactory.getPointColor();
 
-        // Create sprite material and sprite
-        this.spriteMaterial = this.createSpriteMaterial(this.baseColor, false, isVertex, false);
+        const texture = this.createPointTexture(this.baseColor, false, isVertex, false);
+        this.spriteMaterial = DrawMaterialFactory.createSpriteMaterial(texture);
         this.sprite = new THREE.Sprite(this.spriteMaterial);
 
-        // Add identifier to object
         this.userData.isVertex = isVertex;
         this.userData.isVertexPoint = true;
 
-        // Set sprite size (half size)
         const scale = isVertex ? 0.008 : 0.015;
         this.sprite.scale.set(scale, scale, 1);
         this.sprite.renderOrder = 100;
 
-        // Create selection ring (only regular points have selection rings)
+        this.ringMaterial = null;
+        this.ringMesh = null;
+
         if (!isVertex) {
             const ringGeometry = new THREE.RingGeometry(1.5, 1.7, 32);
-            const ringMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffff00,
-                transparent: true,
-                opacity: 0,
-                side: THREE.DoubleSide,
-                depthTest: false
-            });
-            this.ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+            this.ringMaterial = DrawMaterialFactory.createRingMaterial();
+            this.ringMesh = new THREE.Mesh(ringGeometry, this.ringMaterial);
             this.ringMesh.rotation.x = Math.PI / 2;
             this.ringMesh.renderOrder = 99;
             this.add(this.ringMesh);
@@ -61,26 +107,25 @@ export class PointObject extends DrawableObject {
         this.update();
     }
 
-    // Create sprite material
-    private createSpriteMaterial(
-        color: number,
-        isSelected: boolean = false,
-        isVertex: boolean = false,
-        isEditing: boolean = false
-    ): THREE.SpriteMaterial {
-        const texture = this.createPointTexture(color, isSelected, isVertex, isEditing);
-        return new THREE.SpriteMaterial({
-            map: texture,
-            color: 0xffffff,
-            transparent: true,
-            opacity: 1.0,
-            sizeAttenuation: false,
-            depthTest: false,
-            depthWrite: false
-        });
+    /**
+     * 获取绘制对象类型
+     * @returns 点对象类型标识
+     */
+    public getDrawableType(): DrawableType {
+        return DrawableType.POINT;
     }
 
-    // Change texture creation method to overloadable method
+    /**
+     * 创建点纹理
+     *
+     * @param color - 颜色值
+     * @param isSelected - 是否选中
+     * @param isVertex - 是否为顶点标记
+     * @param isEditing - 是否编辑状态
+     * @returns CanvasTexture 实例
+     *
+     * 说明：使用缓存机制避免重复创建相同纹理
+     */
     protected createPointTexture(
         color: number,
         isSelected: boolean = false,
@@ -89,8 +134,9 @@ export class PointObject extends DrawableObject {
     ): THREE.Texture {
         const cacheKey = `${color}-${isSelected}-${isVertex}-${isEditing}`;
 
-        if (textureCache.has(cacheKey)) {
-            return textureCache.get(cacheKey)!;
+        const cachedTexture = textureCache.get(cacheKey);
+        if (cachedTexture) {
+            return cachedTexture;
         }
 
         const canvas = document.createElement("canvas");
@@ -98,80 +144,72 @@ export class PointObject extends DrawableObject {
         const size = isSelected || isEditing ? baseSize * 1.3 : baseSize;
         canvas.width = size;
         canvas.height = size;
-        const context = canvas.getContext("2d")!;
+        const context = canvas.getContext("2d");
 
-        // Clear background
+        if (!context) {
+            throw new Error("Failed to get 2D rendering context");
+        }
+
         context.clearRect(0, 0, size, size);
 
         const center = size / 2;
 
-        // Selected state - Yellow concentric circles (two-ring design)
         if (isSelected) {
-            // Outer ring - Yellow circle
-            context.strokeStyle = "#ffd700"; // Gold
+            context.strokeStyle = "#ffd700";
             context.lineWidth = size / 8;
             context.beginPath();
             context.arc(center, center, size / 2 - size / 16, 0, Math.PI * 2);
             context.stroke();
 
-            // Inner ring - Yellow circle
-            context.strokeStyle = "#ffd700"; // Gold
+            context.strokeStyle = "#ffd700";
+            context.lineWidth = size / 8;
+            context.beginPath();
+            context.arc(center, center, size / 4, 0, Math.PI * 2);
+            context.stroke();
+        } else if (isEditing) {
+            context.strokeStyle = "#ffa500";
+            context.lineWidth = size / 8;
+            context.beginPath();
+            context.arc(center, center, size / 2 - size / 16, 0, Math.PI * 2);
+            context.stroke();
+
+            context.strokeStyle = "#ffa500";
+            context.lineWidth = size / 8;
+            context.beginPath();
+            context.arc(center, center, size / 4, 0, Math.PI * 2);
+            context.stroke();
+        } else {
+            context.strokeStyle = "#ffff00";
+            context.lineWidth = size / 8;
+            context.beginPath();
+            context.arc(center, center, size / 2 - size / 16, 0, Math.PI * 2);
+            context.stroke();
+
+            context.strokeStyle = "#ffff00";
             context.lineWidth = size / 8;
             context.beginPath();
             context.arc(center, center, size / 4, 0, Math.PI * 2);
             context.stroke();
         }
 
-        // Editing state - Yellow concentric circles (two-ring design)
-        else if (isEditing) {
-            // Outer ring - Orange-yellow circle
-            context.strokeStyle = "#ffa500"; // Orange
-            context.lineWidth = size / 8;
-            context.beginPath();
-            context.arc(center, center, size / 2 - size / 16, 0, Math.PI * 2);
-            context.stroke();
-
-            // Inner ring - Orange-yellow circle
-            context.strokeStyle = "#ffa500"; // Orange
-            context.lineWidth = size / 8;
-            context.beginPath();
-            context.arc(center, center, size / 4, 0, Math.PI * 2);
-            context.stroke();
-        }
-
-        // Default state - Yellow concentric circles (two-ring design)
-        else {
-            // Outer ring - Yellow circle
-            context.strokeStyle = "#ffff00"; // Yellow
-            context.lineWidth = size / 8;
-            context.beginPath();
-            context.arc(center, center, size / 2 - size / 16, 0, Math.PI * 2);
-            context.stroke();
-
-            // Inner ring - Yellow circle
-            context.strokeStyle = "#ffff00"; // Yellow
-            context.lineWidth = size / 8;
-            context.beginPath();
-            context.arc(center, center, size / 4, 0, Math.PI * 2);
-            context.stroke();
-        }
-
-        // Create texture
         const texture = new THREE.CanvasTexture(canvas);
         textureCache.set(cacheKey, texture);
 
         return texture;
     }
 
-    // Implement base class abstract method
+    /**
+     * 创建轮廓对象（点对象不需要轮廓）
+     */
     protected createOutlineObject(): void {
-        // Point objects do not need outlines
+        // 点对象不需要轮廓
     }
 
-    protected updateOutline(): void {
-        // Point objects do not need outline updates
-    }
-
+    /**
+     * 更新顶点位置
+     * @param index - 顶点索引（点对象固定为 0）
+     * @param newVertex - 新的顶点坐标
+     */
     public updateVertex(index: number, newVertex: GeoCoordinates): void {
         if (index === 0 && this.vertices.length > 0) {
             this.vertices[0] = newVertex;
@@ -179,21 +217,32 @@ export class PointObject extends DrawableObject {
         }
     }
 
+    /**
+     * 移动点到新位置
+     * @param newPosition - 新的位置坐标
+     */
     public moveTo(newPosition: GeoCoordinates): void {
         if (this.vertices.length > 0) {
             this.vertices[0] = new GeoCoordinates(
                 newPosition.latitude,
                 newPosition.longitude,
-                newPosition.altitude || this.vertices[0].altitude
+                newPosition.altitude !== undefined ? newPosition.altitude : this.vertices[0].altitude
             );
             this.update();
         }
     }
 
+    /**
+     * 获取点的中心点坐标（即点本身）
+     * @returns 点的坐标
+     */
     public getCenter(): GeoCoordinates {
         return this.vertices.length > 0 ? this.vertices[0] : new GeoCoordinates(0, 0);
     }
 
+    /**
+     * 更新点显示
+     */
     public update(): void {
         if (this.vertices.length > 0) {
             const position = this.mapView.projection.projectPoint(
@@ -204,50 +253,53 @@ export class PointObject extends DrawableObject {
         }
     }
 
+    /**
+     * 更新点视觉效果
+     * 响应选中/编辑状态变化
+     */
     protected updateVisuals(): void {
-        // Recreate material based on selection and editing state
         let displayColor = this.baseColor;
 
         if (this.isSelected) {
-            displayColor = 0x00ff00;
+            displayColor = DrawMaterialFactory.getSelectedColor();
         } else if (this.isEditing) {
-            displayColor = 0xffff00;
+            displayColor = DrawMaterialFactory.getEditingColor();
         }
 
         const oldMaterial = this.spriteMaterial;
-        this.spriteMaterial = this.createSpriteMaterial(
+        const texture = this.createPointTexture(
             displayColor,
             this.isSelected,
             this.isVertex,
             this.isEditing
         );
+        this.spriteMaterial = DrawMaterialFactory.createSpriteMaterial(texture);
         this.sprite.material = this.spriteMaterial;
 
-        // Clean up old material
-        oldMaterial.dispose();
+        DrawMaterialFactory.disposeMaterial(oldMaterial);
 
-        // Update selection ring visibility (only for regular points)
-        if (!this.isVertex && this.ringMesh) {
-            (this.ringMesh.material as THREE.MeshBasicMaterial).opacity = this.isSelected ? 0.8 : 0;
+        if (this.ringMesh && this.ringMaterial) {
+            this.ringMaterial.opacity = this.isSelected ? 0.8 : 0;
         }
     }
 
-    // Add hover state update method with state protection
+    /**
+     * 更新悬停状态
+     * @param isHovered - 是否悬停
+     *
+     * 状态保护逻辑：仅当顶点未选中时才允许清除高亮悬停状态
+     */
     public updateHoverState(isHovered: boolean): void {
-        // State protection logic: Only allow clearing highlight hover state when vertex is not selected
         if (!isHovered && this.isSelected) {
-            return; // Maintain selected state, do not clear highlight
-        }
-
-        // Only process hover effects when not in selected state
-        if (!this.isSelected) {
-            // Hover effects can be added here, but do not affect selected state
-            // For example, slight size changes or color changes
+            return;
         }
     }
 
-    // Implement base class abstract method
-    public toGeoJSON(): any {
+    /**
+     * 转换为 GeoJSON 格式
+     * @returns 类型化的 Point GeoJSON 对象
+     */
+    public toGeoJSON(): DrawPointGeometry {
         return {
             type: "Point",
             coordinates: [
@@ -258,18 +310,30 @@ export class PointObject extends DrawableObject {
         };
     }
 
-    // Vertex selection method implementation
+    /**
+     * 设置顶点选中状态
+     * @param index - 顶点索引（点对象固定为 0）
+     * @param selected - 是否选中
+     */
     public setVertexSelected(index: number, selected: boolean): void {
         if (index === 0) {
             this.setSelected(selected);
         }
     }
 
+    /**
+     * 获取顶点选中状态
+     * @param index - 顶点索引（点对象固定为 0）
+     * @returns 是否选中
+     */
     public getVertexSelected(index: number): boolean {
         return index === 0 ? this.isSelected : false;
     }
 
-    // Height-related methods
+    /**
+     * 设置高度
+     * @param height - 高度值
+     */
     public setHeight(height: number): void {
         if (this.vertices.length > 0) {
             this.vertices[0].altitude = height;
@@ -277,27 +341,52 @@ export class PointObject extends DrawableObject {
         }
     }
 
+    /**
+     * 获取高度
+     * @returns 高度值
+     */
     public getHeight(): number {
         return this.vertices.length > 0 ? this.vertices[0].altitude || 0 : 0;
     }
 
-    // Edit state control
+    /**
+     * 设置编辑状态
+     * @param editing - 是否处于编辑状态
+     */
     public setEditing(editing: boolean): void {
         this.isEditing = editing;
         this.updateVisuals();
     }
 
+    /**
+     * 获取编辑状态
+     * @returns 是否处于编辑状态
+     */
     public getEditing(): boolean {
         return this.isEditing;
     }
 
-    // Get material (for external access)
+    /**
+     * 获取精灵材质
+     * @returns SpriteMaterial 实例
+     */
     get material(): THREE.SpriteMaterial {
         return this.spriteMaterial;
     }
 
-    // Static method: Create point object from GeoJSON
-    public static fromGeoJSON(mapView: MapView, geoJson: any, id?: string): PointObject | null {
+    /**
+     * 从 GeoJSON 创建点对象
+     *
+     * @param mapView - 地图视图实例
+     * @param geoJson - GeoJSON Point 几何体
+     * @param id - 可选的对象 ID
+     * @returns PointObject 实例或 null
+     */
+    public static fromGeoJSON(
+        mapView: MapView,
+        geoJson: GeoJsonPoint,
+        id?: string
+    ): PointObject | null {
         if (!geoJson || geoJson.type !== "Point" || !geoJson.coordinates) {
             return null;
         }
@@ -317,25 +406,26 @@ export class PointObject extends DrawableObject {
         }
     }
 
+    /**
+     * 释放点资源
+     */
     public dispose(): void {
-        // Clean up sprite material
-        this.spriteMaterial.dispose();
+        DrawMaterialFactory.disposeMaterial(this.spriteMaterial);
 
-        // Clean up selection ring
-        if (!this.isVertex && this.ringMesh) {
-            this.ringMesh.geometry.dispose();
-            (this.ringMesh.material as THREE.Material).dispose();
+        if (this.ringMesh) {
+            DrawMaterialFactory.disposeGeometry(this.ringMesh.geometry);
+            DrawMaterialFactory.disposeMaterial(this.ringMesh.material);
         }
 
-        // Remove from parent object
         this.removeFromParent();
-
-        // Call base class dispose method
         super.dispose();
     }
 }
 
-// Utility function to clean up texture cache
+/**
+ * 清理点纹理缓存
+ * 释放所有缓存的纹理资源
+ */
 export const clearPointTextureCache = (): void => {
     textureCache.forEach(texture => {
         texture.dispose();
