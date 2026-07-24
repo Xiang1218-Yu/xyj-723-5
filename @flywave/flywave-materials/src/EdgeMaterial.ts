@@ -6,19 +6,20 @@ import {
     type DisplacementFeature,
     type DisplacementFeatureParameters
 } from "./DisplacementFeature";
-import {
-    type ExtrusionFeatureParameters,
-    type FadingFeatureParameters,
-    ExtrusionFeature,
-    FadingFeature
-} from "./MapMeshMaterials";
+import { type ExtrusionFeatureParameters, ExtrusionFeature } from "./ExtrusionFeature";
+import { type FadingFeatureParameters, FadingFeature } from "./FadingFeature";
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
 import {
     type RawShaderMaterialParameters,
     type RendererMaterialParameters,
     RawShaderMaterial
 } from "./RawShaderMaterial";
-import { enforceBlending, setShaderDefine, setShaderMaterialDefine } from "./Utils";
+import {
+    enforceBlending,
+    setShaderDefine,
+    setShaderMaterialDefine,
+    type ShaderDefines
+} from "./Utils";
 
 const vertexSource: string = `
 #define EDGE_DEPTH_OFFSET 0.0001
@@ -164,7 +165,7 @@ export class EdgeMaterial
     constructor(params?: EdgeMaterialParameters) {
         let shaderParams: RawShaderMaterialParameters | undefined;
         if (params) {
-            const defines: Record<string, any> = {};
+            const defines: ShaderDefines = {};
             const hasExtrusion =
                 params.extrusionRatio !== undefined &&
                 params.extrusionRatio >= ExtrusionFeatureDefs.DEFAULT_RATIO_MIN &&
@@ -210,8 +211,8 @@ export class EdgeMaterial
             if (params.color !== undefined) {
                 // Color may be set directly on object (omitting class setter), because we already
                 // know that is does no require any special handling nor material update
-                // (see: set color()).
-                this.color.set(params.color as any);
+                // (see: set color()). `number | string` is a subset of THREE.ColorRepresentation.
+                this.color.set(params.color);
             }
             if (params.colorMix !== undefined) {
                 this.colorMix = params.colorMix;

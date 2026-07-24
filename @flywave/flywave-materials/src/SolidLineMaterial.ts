@@ -7,18 +7,20 @@ import {
     type DisplacementFeature,
     type DisplacementFeatureParameters
 } from "./DisplacementFeature";
-import { type FadingFeatureParameters, FadingFeature } from "./MapMeshMaterials";
+import { type FadingFeatureParameters, FadingFeature } from "./FadingFeature";
 import {
     type RawShaderMaterialParameters,
     type RendererMaterialParameters,
     RawShaderMaterial
 } from "./RawShaderMaterial";
 import linesShaderChunk, { LineCapsModes } from "./ShaderChunks/LinesChunks";
+import { ShaderChunkRegistry } from "./ShaderChunks/ShaderChunkRegistry";
 import {
     enforceBlending,
     getShaderMaterialDefine,
     setShaderDefine,
-    setShaderMaterialDefine
+    setShaderMaterialDefine,
+    type ShaderDefines
 } from "./Utils";
 
 const LineCapsDefinesMapping: { [key in LineCaps]: number } = {
@@ -36,7 +38,7 @@ const DefinesLineCapsMapping: Record<number, LineCaps> = Object.keys(LineCapsDef
         r[defineValue] = defineKey;
         return r;
     },
-    {} as any as Record<number, LineCaps>
+    {} as Record<number, LineCaps>
 );
 
 export enum LineDashesModes {
@@ -58,7 +60,7 @@ const DefinesLineDashesMapping: Record<number, LineDashes> = Object.keys(
     const defineValue: number = LineDashesDefinesMapping[defineKey];
     r[defineValue] = defineKey;
     return r;
-}, {} as any as Record<number, LineDashes>);
+}, {} as Record<number, LineDashes>);
 
 /**
  * The vLength contains the actual line length, it's needed for the creation of line caps by
@@ -440,12 +442,13 @@ export class SolidLineMaterial
      * material.
      */
     constructor(params?: SolidLineMaterialParameters) {
-        Object.assign(THREE.ShaderChunk, linesShaderChunk);
+        // Register the shared line shader chunks through the unified registry (idempotent).
+        ShaderChunkRegistry.register("lines", linesShaderChunk);
 
         FadingFeature.patchGlobalShaderChunks();
 
         // Setup default defines.
-        const defines: Record<string, any> = {
+        const defines: ShaderDefines = {
             CAPS_MODE: LineCapsModes.CAPS_ROUND,
             DASHES_MODE: LineDashesModes.DASHES_SQUARE
         };
@@ -454,7 +457,8 @@ export class SolidLineMaterial
         // proper set for shader compilation, without need to re-compile.
         let fogParam = true;
         let opacityParam = 1.0;
-        let displacementMap;
+        // Optional displacement texture derived from the incoming parameters.
+        let displacementMap: THREE.Texture | undefined;
 
         let shaderParams: RawShaderMaterialParameters | undefined;
         if (params) {
@@ -543,11 +547,12 @@ export class SolidLineMaterial
         // Apply initial parameter values.
         if (params) {
             if (params.color !== undefined) {
-                tmpColor.set(params.color as any);
+                // `number | string` is a valid subset of THREE.ColorRepresentation.
+                tmpColor.set(params.color);
                 this.color = tmpColor;
             }
             if (params.outlineColor !== undefined) {
-                tmpColor.set(params.outlineColor as any);
+                tmpColor.set(params.outlineColor);
                 this.outlineColor = tmpColor;
             }
             if (params.lineWidth !== undefined) {
@@ -588,7 +593,7 @@ export class SolidLineMaterial
                 this.dashes = params.dashes;
             }
             if (params.dashColor !== undefined) {
-                tmpColor.set(params.dashColor as any);
+                tmpColor.set(params.dashColor);
                 this.dashColor = tmpColor;
             }
             if (params.dashSize !== undefined) {

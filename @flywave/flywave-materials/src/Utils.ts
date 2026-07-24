@@ -10,6 +10,26 @@ export const DEFINE_BOOL_TRUE = "";
 export const DEFINE_BOOL_FALSE = undefined;
 
 /**
+ * Precise type describing a single GPU shader preprocessor _define_ value.
+ *
+ * The engine only ever stores three kinds of define values:
+ * - `string` (`""` for a "defined but valueless" boolean-style define),
+ * - `number` (an explicit compile time constant),
+ * - `undefined` (the define is not set, i.e. logically `false`).
+ *
+ * Using this union instead of `any` keeps the whole material/shader layer type-safe.
+ */
+export type ShaderDefineValue = string | number | undefined;
+
+/**
+ * Precise type for the `defines` map shared across all engine materials and shaders.
+ *
+ * This is the single, canonical shape used by every helper in this module as well as by
+ * {@link RawShaderMaterial} derived materials, replacing the previous `Record<string, any>`.
+ */
+export type ShaderDefines = Record<string, ShaderDefineValue>;
+
+/**
  * Insert shader includes after another shader include.
  *
  * @param shaderContent - Original string.
@@ -203,7 +223,7 @@ export function getShaderMaterialDefine(
  * @see setShaderMaterialDefine.
  */
 export function setShaderDefine(
-    defines: Record<string, any>,
+    defines: ShaderDefines,
     key: string,
     value: boolean | number
 ): boolean {
@@ -230,13 +250,16 @@ export function setShaderDefine(
  * @param defines - The `defines` map.
  * @param key - The identifier of the _define_.
  */
-export function getShaderDefine(defines: Record<string, any>, key: string): boolean | number {
+export function getShaderDefine(defines: ShaderDefines, key: string): boolean | number {
     const currentValue = defines[key];
-    const semanticValue =
-        currentValue === DEFINE_BOOL_FALSE
-            ? false
-            : currentValue === DEFINE_BOOL_TRUE
-            ? true
-            : currentValue;
-    return semanticValue;
+    // `undefined` (DEFINE_BOOL_FALSE) means the define is not set -> semantically `false`.
+    if (currentValue === DEFINE_BOOL_FALSE) {
+        return false;
+    }
+    // A numeric value is a compile time constant and is returned verbatim.
+    if (typeof currentValue === "number") {
+        return currentValue;
+    }
+    // Any string value (including DEFINE_BOOL_TRUE === "") means the define is set -> `true`.
+    return true;
 }

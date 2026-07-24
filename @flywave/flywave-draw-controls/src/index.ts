@@ -8,3 +8,8 @@ export type { PointObject } from "./PointObject";
 export { GeoJSONDrawControls } from "./GeoJSONDrawControls";
 export type { MeasureLine } from "./MeasureLine";
 export { MeasureToolControls } from "./MeasureToolControls";
+export {
+    type DrawableMaterialStrategy,
+    DefaultDrawableMaterialStrategy,
+    defaultDrawableMaterialStrategy
+} from "./DrawableMaterialStrategy";

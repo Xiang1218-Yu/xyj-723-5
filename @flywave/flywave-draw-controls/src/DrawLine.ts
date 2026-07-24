@@ -1,5 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { type LineString } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three";
@@ -8,6 +9,7 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 
 import { DrawableObject } from "./DrawableObject";
+import { type DrawableMaterialStrategy } from "./DrawableMaterialStrategy";
 import { PointObject } from "./PointObject";
 
 export class DrawLine extends DrawableObject {
@@ -20,8 +22,13 @@ export class DrawLine extends DrawableObject {
     protected lineColor: number = 0xffff00;
     protected vertexPoints: PointObject[] = [];
 
-    constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
-        super(mapView, id);
+    constructor(
+        mapView: MapView,
+        vertices: GeoCoordinates[] = [],
+        id?: string,
+        materialStrategy?: DrawableMaterialStrategy
+    ) {
+        super(mapView, id, materialStrategy);
         this.vertices = vertices;
 
         const geometry = new LineGeometry();
@@ -46,15 +53,9 @@ export class DrawLine extends DrawableObject {
      * @returns LineMaterial instance
      */
     protected createLineMaterial(color: number, linewidth: number): LineMaterial {
-        return new LineMaterial({
-            color,
-            linewidth,
-            dashed: false,
-            opacity: 1.0,
-            depthTest: false,
-            transparent: true,
-            alphaToCoverage: true
-        });
+        // Delegate appearance to the injected material strategy (Strategy pattern). Subclasses may
+        // still override this method to fully customize the line look (e.g. MeasureLine).
+        return this.materialStrategy.createLineMaterial(color, linewidth);
     }
 
     /**
@@ -250,9 +251,9 @@ export class DrawLine extends DrawableObject {
 
     /**
      * Convert to GeoJSON format
-     * @returns GeoJSON object
+     * @returns GeoJSON `LineString` geometry
      */
-    public toGeoJSON(): any {
+    public toGeoJSON(): LineString {
         return {
             type: "LineString",
             coordinates: this.vertices.map(vertex => [
@@ -319,17 +320,9 @@ export class DrawLine extends DrawableObject {
      * @returns LineMaterial instance
      */
     protected createOutlineMaterial(): LineMaterial {
-        return new LineMaterial({
-            color: 0xffd700,
-            linewidth: 3,
-            dashed: true,
-            dashSize: 0.8,
-            gapSize: 0.4,
-            depthTest: false,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.8
-        });
+        // Delegate appearance to the injected material strategy (Strategy pattern). Subclasses may
+        // still override this method to fully customize the outline look (e.g. MeasureLine).
+        return this.materialStrategy.createLineOutlineMaterial();
     }
 
     /**

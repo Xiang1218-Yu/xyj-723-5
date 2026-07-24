@@ -2,6 +2,7 @@
 
 // src/DrawPolygon.ts
 
+import { type Polygon } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
 import earcut from "earcut";
@@ -11,6 +12,7 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial";
 
 import { DrawableObject } from "./DrawableObject";
+import { type DrawableMaterialStrategy } from "./DrawableMaterialStrategy";
 import { PointObject } from "./PointObject";
 
 export class DrawPolygon extends DrawableObject {
@@ -24,8 +26,13 @@ export class DrawPolygon extends DrawableObject {
     protected edges: Line2[] = [];
     protected outlineEdges: Line2[] = [];
 
-    constructor(mapView: MapView, vertices: GeoCoordinates[] = [], id?: string) {
-        super(mapView, id);
+    constructor(
+        mapView: MapView,
+        vertices: GeoCoordinates[] = [],
+        id?: string,
+        materialStrategy?: DrawableMaterialStrategy
+    ) {
+        super(mapView, id, materialStrategy);
         this.vertices = vertices;
 
         // Create face geometry
@@ -54,25 +61,14 @@ export class DrawPolygon extends DrawableObject {
 
     // Change the material creation method to an overloadable method
     protected createPolygonMaterial(color: number, opacity: number): THREE.MeshPhongMaterial {
-        return new THREE.MeshPhongMaterial({
-            color,
-            opacity,
-            transparent: true,
-            side: THREE.DoubleSide,
-            specular: 0x111111,
-            shininess: 30
-        });
+        // Delegate appearance to the injected material strategy (Strategy pattern).
+        return this.materialStrategy.createPolygonFillMaterial(color, opacity);
     }
 
     // Change the outline material creation method to an overloadable method
     protected createOutlineMaterial(color: number): LineMaterial {
-        return new LineMaterial({
-            color,
-            linewidth: 3,
-            dashed: false,
-            opacity: 1.0,
-            transparent: true
-        });
+        // Delegate appearance to the injected material strategy (Strategy pattern).
+        return this.materialStrategy.createPolygonOutlineMaterial(color);
     }
 
     private createEdges(): void {
@@ -83,13 +79,8 @@ export class DrawPolygon extends DrawableObject {
         // Create Line2 objects for each edge
         for (let i = 0; i < this.vertices.length; i++) {
             const geometry = new LineGeometry();
-            const material = new LineMaterial({
-                color: 0x888888,
-                linewidth: 1,
-                dashed: false,
-                opacity: 1.0,
-                transparent: true
-            });
+            // Delegate edge appearance to the injected material strategy (Strategy pattern).
+            const material = this.materialStrategy.createPolygonEdgeMaterial();
 
             const line = new Line2(geometry, material);
             line.renderOrder = 1;
@@ -122,17 +113,8 @@ export class DrawPolygon extends DrawableObject {
 
     // Change the outline edge material creation method to an overloadable method
     protected createOutlineEdgeMaterial(): LineMaterial {
-        return new LineMaterial({
-            color: 0xffd700,
-            linewidth: 2,
-            dashed: true,
-            dashSize: 0.6,
-            gapSize: 0.3,
-            depthTest: false,
-            depthWrite: false,
-            transparent: true,
-            opacity: 0.8
-        });
+        // Delegate appearance to the injected material strategy (Strategy pattern).
+        return this.materialStrategy.createPolygonOutlineEdgeMaterial();
     }
 
     protected updateOutline(): void {
@@ -336,7 +318,11 @@ export class DrawPolygon extends DrawableObject {
         }
     }
 
-    public toGeoJSON(): any {
+    /**
+     * Convert to GeoJSON format
+     * @returns GeoJSON `Polygon` geometry
+     */
+    public toGeoJSON(): Polygon {
         return {
             type: "Polygon",
             coordinates: [

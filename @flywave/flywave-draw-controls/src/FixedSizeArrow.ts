@@ -24,6 +24,12 @@ export interface FixedSizeArrowOptions {
  * Inherits from THREE.Object3D, maintains fixed size in screen space
  */
 export class FixedSizeArrow extends THREE.Object3D {
+    /**
+     * Type discriminator marking this object as a fixed-size arrow, used by
+     * {@link FixedSizeArrowSystem} to identify arrows without an `instanceof` check.
+     */
+    public readonly isFixedSizeArrow: true = true;
+
     // Default options
     private static readonly DEFAULT_OPTIONS: FixedSizeArrowOptions = {
         size: 40,
@@ -59,9 +65,6 @@ export class FixedSizeArrow extends THREE.Object3D {
 
         // Create arrow geometry
         this.createArrowGeometry();
-
-        // Mark as fixed size object
-        (this as any).isFixedSizeArrow = true;
     }
 
     /**
@@ -319,7 +322,7 @@ export class FixedSizeArrowSystem {
         if (!this._camera) return;
 
         this._arrows.forEach(arrow => {
-            if ((arrow as any).isFixedSizeArrow) {
+            if (arrow.isFixedSizeArrow) {
                 arrow.updateSize(this._camera!, this._renderer);
             }
         });

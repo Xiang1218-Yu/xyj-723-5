@@ -29,25 +29,27 @@ export class RawShaderMaterial extends THREE.RawShaderMaterial {
     constructor(params?: RawShaderMaterialParameters) {
         const isWebGL2 = params?.rendererCapabilities.isWebGL2 === true;
 
+        // Strip `rendererCapabilities` from the parameters: it is a flywave-specific field that is
+        // not part of THREE.ShaderMaterialParameters and would trigger THREE.js warnings if passed
+        // through to the base constructor. Using object rest destructuring keeps this fully typed
+        // and removes the previous `delete (shaderParams as any)` cast.
         const shaderParams: THREE.ShaderMaterialParameters | undefined = params
-            ? {
-                  ...params,
-                  glslVersion: isWebGL2 ? THREE.GLSL3 : THREE.GLSL1,
-                  vertexShader:
-                      isWebGL2 && params.vertexShader
-                          ? convertVertexShaderToWebGL2(params.vertexShader)
-                          : params.vertexShader,
-                  fragmentShader:
-                      isWebGL2 && params.fragmentShader
-                          ? convertFragmentShaderToWebGL2(params.fragmentShader)
-                          : params.fragmentShader
-              }
+            ? (() => {
+                  const { rendererCapabilities: _rendererCapabilities, ...rest } = params;
+                  return {
+                      ...rest,
+                      glslVersion: isWebGL2 ? THREE.GLSL3 : THREE.GLSL1,
+                      vertexShader:
+                          isWebGL2 && params.vertexShader
+                              ? convertVertexShaderToWebGL2(params.vertexShader)
+                              : params.vertexShader,
+                      fragmentShader:
+                          isWebGL2 && params.fragmentShader
+                              ? convertFragmentShaderToWebGL2(params.fragmentShader)
+                              : params.fragmentShader
+                  };
+              })()
             : undefined;
-        // Remove properties that are not in THREE.ShaderMaterialParameters, otherwise THREE.js
-        // will log warnings.
-        if (shaderParams) {
-            delete (shaderParams as any).rendererCapabilities;
-        }
         super(shaderParams);
         this.invalidateFog();
         this.invalidateLogarithmicDepthBuffer(

@@ -1,8 +1,19 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { type FeatureGeometry } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import * as THREE from "three";
+
+import {
+    type DrawableMaterialStrategy,
+    defaultDrawableMaterialStrategy
+} from "./DrawableMaterialStrategy";
+
+/**
+ * A single coordinate tuple `[longitude, latitude, altitude?]` as used by GeoJSON geometries.
+ */
+export type GeoJSONPosition = number[];
 
 export abstract class DrawableObject extends THREE.Object3D {
     public isSelected: boolean = false;
@@ -11,9 +22,21 @@ export abstract class DrawableObject extends THREE.Object3D {
     protected outlineObject: THREE.Object3D | null = null;
     protected vertices: GeoCoordinates[] = [];
 
-    constructor(mapView: MapView, id?: string) {
+    /**
+     * Strategy responsible for creating this object's THREE materials. Injected so appearance can
+     * be customized/themed without subclassing (see {@link DrawableMaterialStrategy}). Defaults to
+     * {@link defaultDrawableMaterialStrategy}, which reproduces the engine's built-in look.
+     */
+    protected readonly materialStrategy: DrawableMaterialStrategy;
+
+    constructor(
+        mapView: MapView,
+        id?: string,
+        materialStrategy: DrawableMaterialStrategy = defaultDrawableMaterialStrategy
+    ) {
         super();
         this.mapView = mapView;
+        this.materialStrategy = materialStrategy;
 
         mapView.addEventListener(
             MapViewEventNames.CameraPositionChanged,
@@ -31,7 +54,11 @@ export abstract class DrawableObject extends THREE.Object3D {
     public abstract setVertexSelected(index: number, selected: boolean): void;
     public abstract getVertexSelected(index: number): boolean;
     public abstract update(): void;
-    public abstract toGeoJSON(): any;
+    /**
+     * Serialize this drawable object to its GeoJSON geometry representation.
+     * @returns The GeoJSON geometry (e.g. `Point`, `LineString`, `Polygon`).
+     */
+    public abstract toGeoJSON(): FeatureGeometry;
 
     /**
      * Update vertex position
@@ -164,17 +191,19 @@ export abstract class DrawableObject extends THREE.Object3D {
         );
         if (this.outlineObject) {
             this.remove(this.outlineObject);
-            // Only clean up the geometry and material of the outline
-            if ((this.outlineObject as any).geometry) {
-                (this.outlineObject as any).geometry.dispose();
+            // Only clean up the geometry and material of the outline. Outline objects are always
+            // renderable primitives (Mesh/Line/Points), all of which expose `geometry`/`material`.
+            const outline = this.outlineObject as THREE.Mesh | THREE.Line | THREE.Points;
+            if (outline.geometry) {
+                outline.geometry.dispose();
             }
-            if ((this.outlineObject as any).material) {
-                if (Array.isArray((this.outlineObject as any).material)) {
-                    (this.outlineObject as any).material.forEach((mat: THREE.Material) => {
+            if (outline.material) {
+                if (Array.isArray(outline.material)) {
+                    outline.material.forEach((mat: THREE.Material) => {
                         mat.dispose();
                     });
                 } else {
-                    ((this.outlineObject as any).material as THREE.Material).dispose();
+                    outline.material.dispose();
                 }
             }
         }
@@ -187,7 +216,9 @@ export abstract class DrawableObject extends THREE.Object3D {
      * @param coordinates - Coordinate array
      * @returns GeoCoordinates array
      */
-    protected static createVerticesFromCoordinates(coordinates: any[]): GeoCoordinates[] {
+    protected static createVerticesFromCoordinates(
+        coordinates: GeoJSONPosition[]
+    ): GeoCoordinates[] {
         return coordinates.map(coord => {
             if (Array.isArray(coord) && coord.length >= 2) {
                 return new GeoCoordinates(

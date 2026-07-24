@@ -8,6 +8,15 @@ import * as THREE from "three";
 import { HeightHandle } from "./HeightHandle";
 import { type PointObject } from "./PointObject";
 
+/**
+ * Minimal structural contract for objects that expose editable vertex points
+ * (e.g. {@link DrawLine} and {@link DrawPolygon}). Used to attach the height handle to a
+ * specific vertex without depending on a concrete draw-object type.
+ */
+export interface VertexPointProvider {
+    getVertexPoints(): PointObject[];
+}
+
 export class HeightAdjustManager extends THREE.Object3D {
     private readonly mapView: MapView;
     private readonly heightHandle: HeightHandle;
@@ -122,8 +131,8 @@ export class HeightAdjustManager extends THREE.Object3D {
         return position;
     }
 
-    public attachToLineVertex(line: any, vertexIndex: number): void {
-        if (!line || !line.getVertexPoints || vertexIndex < 0) {
+    public attachToLineVertex(line: VertexPointProvider | null, vertexIndex: number): void {
+        if (!line || typeof line.getVertexPoints !== "function" || vertexIndex < 0) {
             this.detach();
             return;
         }
