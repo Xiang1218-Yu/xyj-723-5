@@ -13,18 +13,10 @@ import {
     FadingFeature
 } from "./MapMeshMaterials";
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
-import {
-    type RawShaderMaterialParameters,
-    type RendererMaterialParameters,
-    RawShaderMaterial
-} from "./RawShaderMaterial";
-import {
-    enforceBlending,
-    setShaderDefine,
-    setShaderMaterialDefine,
-    type ShaderDefines
-} from "./Utils";
+import { RawShaderMaterial, type RawShaderMaterialParameters, type RendererMaterialParameters } from "./RawShaderMaterial";
+import { enforceBlending, setShaderDefine, setShaderMaterialDefine, type ShaderDefines } from "./Utils";
 import { setMaterialColor } from "./MaterialTypes";
+import { ensureShaderChunks } from "./ShaderChunkManager";
 
 const vertexSource: string = `
 #define EDGE_DEPTH_OFFSET 0.0001
@@ -208,8 +200,7 @@ export class EdgeMaterial
         super(shaderParams);
         enforceBlending(this);
 
-        FadingFeature.patchGlobalShaderChunks();
-        ExtrusionFeature.patchGlobalShaderChunks();
+        ensureShaderChunks("fading", "extrusion");
 
         // Apply initial parameter values.
         if (params !== undefined) {

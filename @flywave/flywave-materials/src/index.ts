@@ -23,6 +23,7 @@ export * from "./MaterialTypes";
 export * from "./MSAAMaterial";
 export * from "./RawShaderMaterial";
 export * from "./SepiaShader";
+export * from "./ShaderChunkManager";
 export * from "./SkyAtmosphereMaterial";
 export * from "./SolidLineMaterial";
 export * from "./Utils";

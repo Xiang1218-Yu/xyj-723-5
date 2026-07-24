@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 
-import linesShaderChunk from "./ShaderChunks/LinesChunks";
+import { ensureShaderChunks } from "./ShaderChunkManager";
 
 const vertexSource: string = `
 #ifdef USE_COLOR
@@ -95,7 +95,7 @@ export class HighPrecisionPointMaterial extends THREE.PointsMaterial {
      * @param params - HighPrecisionPointMaterial 参数
      */
     constructor(params?: HighPrecisionPointMaterialParameters) {
-        Object.assign(THREE.ShaderChunk, linesShaderChunk);
+        ensureShaderChunks("highPrecisionLines");
 
         super(params);
 

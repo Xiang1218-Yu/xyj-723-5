@@ -14,13 +14,15 @@ import {
     type RendererMaterialParameters,
     RawShaderMaterial
 } from "./RawShaderMaterial";
-import linesShaderChunk, { LineCapsModes } from "./ShaderChunks/LinesChunks";
+import { LineCapsModes } from "./ShaderChunks/LinesChunks";
 import {
     enforceBlending,
     getShaderMaterialDefine,
     setShaderDefine,
-    setShaderMaterialDefine
+    setShaderMaterialDefine,
+    type ShaderDefines
 } from "./Utils";
+import { ensureShaderChunks } from "./ShaderChunkManager";
 
 const LineCapsDefinesMapping: { [key in LineCaps]: number } = {
     None: LineCapsModes.CAPS_NONE,
@@ -441,12 +443,10 @@ export class SolidLineMaterial
      * material.
      */
     constructor(params?: SolidLineMaterialParameters) {
-        Object.assign(THREE.ShaderChunk, linesShaderChunk);
-
-        FadingFeature.patchGlobalShaderChunks();
+        ensureShaderChunks("highPrecisionLines", "fading");
 
         // Setup default defines.
-        const defines: Record<string, any> = {
+        const defines: ShaderDefines = {
             CAPS_MODE: LineCapsModes.CAPS_ROUND,
             DASHES_MODE: LineDashesModes.DASHES_SQUARE
         };

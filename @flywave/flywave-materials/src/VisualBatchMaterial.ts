@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 
-import { type ShaderUniforms } from "./MaterialTypes";
+import { type ShaderDefines, type ShaderUniforms } from "./MaterialTypes";
 
 /**
  * Interface defining visual style properties for batch rendering
@@ -67,7 +67,7 @@ class VisualBatchMaterial extends THREE.MeshStandardMaterial {
         maxVisualId: THREE.IUniform<number>;
     } & THREE.ShaderLibShader["uniforms"];
 
-    public defines: Record<string, any> = {};
+    public defines: ShaderDefines = {};
 
     // GLSL shader chunks
     private static readonly ShaderChunks = {

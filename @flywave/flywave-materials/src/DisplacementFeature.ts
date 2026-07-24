@@ -31,10 +31,10 @@ export interface DisplacementFeature {
 }
 
 /**
- * 判断给定材质是否支持用于高程叠加的位移贴图
+ * 类型守卫：判断给定材质是否支持用于高程叠加的位移贴图
  *
  * @param material - 要检查的材质
- * @returns 给定材质是否支持用于高程叠加的位移贴图
+ * @returns 给定材质是否为 DisplacementFeature
  */
 export function hasDisplacementFeature(material: unknown): material is DisplacementFeature {
     return (
@@ -45,24 +45,47 @@ export function hasDisplacementFeature(material: unknown): material is Displacem
 }
 
 /**
- * 设置位移贴图到材质
+ * 将位移贴图设置到单个材质
  *
  * @param displacementMap - 表示用于叠加对象高程数据的纹理
- * @param material - 要更新的材质
+ * @param material - 要更新的单个材质
+ */
+function setDisplacementMapToSingleMaterial(
+    displacementMap: TileDisplacementMap | null,
+    material: DisplacementFeature
+): void {
+    const newMap = displacementMap?.texture ?? null;
+    if (material.displacementMap !== newMap) {
+        material.displacementMap = newMap;
+        material.displacementMapUvMatrix = displacementMap?.uvMatrix;
+        material.needsUpdate = true;
+        if (material.displacementMap !== null) {
+            material.displacementMap.needsUpdate = true;
+        }
+    }
+}
+
+/**
+ * 设置位移贴图到材质
+ *
+ * 支持单个材质或材质数组（THREE.Mesh 的 material 属性可以是 Material 或 Material[]）
+ *
+ * @param displacementMap - 表示用于叠加对象高程数据的纹理
+ * @param material - 要更新的材质（单个材质或材质数组）
  */
 export function setDisplacementMapToMaterial(
     displacementMap: TileDisplacementMap | null,
     material: THREE.Mesh["material"]
 ): void {
-    if (hasDisplacementFeature(material)) {
-        const newMap = displacementMap?.texture ?? null;
-        if (material.displacementMap !== newMap) {
-            material.displacementMap = newMap;
-            material.displacementMapUvMatrix = displacementMap?.uvMatrix;
-            material.needsUpdate = true;
-            if (material.displacementMap !== null) {
-                material.displacementMap.needsUpdate = true;
+    if (Array.isArray(material)) {
+        // 处理材质数组：遍历数组中的每个材质
+        for (const mat of material) {
+            if (hasDisplacementFeature(mat)) {
+                setDisplacementMapToSingleMaterial(displacementMap, mat);
             }
         }
+    } else if (hasDisplacementFeature(material)) {
+        // 处理单个材质
+        setDisplacementMapToSingleMaterial(displacementMap, material);
     }
 }
